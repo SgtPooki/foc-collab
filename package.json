@@ -5,5 +5,10 @@
   "type": "module",
   "scripts": {
     "test": "node --test games/tic-tac-toe/fold.test.js"
+  },
+  "dependencies": {
+    "@filoz/synapse-core": "^0.8.1",
+    "@filoz/synapse-sdk": "^1.2.1",
+    "viem": "^2.56.1"
   }
 }
