@@ -10,9 +10,9 @@
  * player pastes one once; it stays in localStorage, never in a URL.
  */
 import { Synapse } from 'https://esm.sh/@filoz/synapse-sdk@1.2.1'
-import { calibration } from 'https://esm.sh/@filoz/synapse-core/chains'
-import { AddPiecesPermission, fromSecp256k1 } from 'https://esm.sh/@filoz/synapse-core/session-key'
-import { custom, http } from 'https://esm.sh/viem'
+import { calibration } from 'https://esm.sh/@filoz/synapse-core@0.8.1/chains'
+import { AddPiecesPermission, fromSecp256k1, getExpirations } from 'https://esm.sh/@filoz/synapse-core@0.8.1/session-key'
+import { createPublicClient, custom, http } from 'https://esm.sh/viem@2.56.1'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 
@@ -42,20 +42,35 @@ export async function createFocTransport(config) {
   }
 
   const transport = http(calibration.rpcUrls.default.http[0])
+  // The session address has no on-chain actor (it only ever signs), and
+  // Filecoin RPC rejects eth_calls *from* a nonexistent account — which is
+  // what sessionKey.syncExpirations() would issue. Fetch the grant
+  // expirations with a plain public client instead and hand them over.
+  const sessionPrivateKey = getSessionKey(config)
   const sessionKey = fromSecp256k1({
-    privateKey: getSessionKey(config),
+    privateKey: sessionPrivateKey,
     root: wallet,
     chain: calibration,
     transport,
   })
-  await sessionKey.syncExpirations()
+  const expirations = await getExpirations(
+    createPublicClient({ chain: calibration, transport }),
+    { address: wallet, sessionKeyAddress: sessionKey.account.address, permissions: [AddPiecesPermission] },
+  )
+  const refreshed = fromSecp256k1({
+    privateKey: sessionPrivateKey,
+    root: wallet,
+    chain: calibration,
+    transport,
+    expirations,
+  })
 
   // A bare-address account requires a custom() transport wrap (SDK quirk).
   const synapse = Synapse.create({
     account: wallet,
     chain: calibration,
     transport: custom({ request: transport({ chain: calibration, retryCount: 0 }).request }),
-    sessionKey,
+    sessionKey: refreshed,
     source: 'foc-collab-tictactoe',
     // The key is add-only by design; default validation demands all four.
     requiredPermissions: [AddPiecesPermission],
