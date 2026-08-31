@@ -1,0 +1,5 @@
+node_modules/
+.env
+*.car
+dist/
+.DS_Store

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>tic-tac-toe on a move log</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --accent: #2f6fed; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; }
+  main { text-align: center; padding: 1rem; }
+  h1 { font-size: 1.1rem; font-weight: 600; }
+  #board { display: grid; grid-template-columns: repeat(3, 84px); gap: 6px; justify-content: center; margin: 1rem 0; }
+  #board button { height: 84px; font-size: 2.2rem; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
+  #board button:disabled { cursor: default; opacity: 0.9; }
+  #status { min-height: 1.5em; }
+  .meta { font-size: 0.8rem; opacity: 0.7; max-width: 34rem; margin: 0 auto; }
+  #controls { margin: 0.5rem 0 1rem; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+  select, button.ctl { padding: 0.3rem 0.6rem; border-radius: 8px; border: 1px solid var(--line); background: transparent; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <h1>tic-tac-toe, event-sourced</h1>
+  <p class="meta">Every move is an appended JSON piece. The board is a deterministic
+  fold over the ordered move log: illegal or out-of-turn pieces are ignored by
+  every client computing the same fold. Nothing is ever mutated.</p>
+  <div id="controls">
+    <select id="seat"><option value="X">play as X</option><option value="O">play as O</option></select>
+    <button class="ctl" id="new-game">new game</button>
+    <span id="transport-label" class="meta"></span>
+  </div>
+  <div id="board"></div>
+  <p id="status"></p>
+  <p class="meta" id="log-info"></p>
+</main>
+
+<script type="module">
+import { fold } from './fold.js'
+import { createTransport } from './transport.js'
+
+// A transport appends move pieces and lists all pieces for a game, in a
+// stable order. Which backend (local tab-to-tab, or a shared data set on
+// Filecoin Onchain Cloud) is chosen by transport.js from the URL.
+const params = new URLSearchParams(location.search)
+const game = params.get('game') ?? 'local-demo'
+const transport = await createTransport(params)
+
+const boardEl = document.getElementById('board')
+const statusEl = document.getElementById('status')
+const logEl = document.getElementById('log-info')
+const seatEl = document.getElementById('seat')
+document.getElementById('transport-label').textContent = transport.label
+
+let state = fold(game, [])
+
+function render() {
+  boardEl.replaceChildren(...state.board.map((cell, i) => {
+    const b = document.createElement('button')
+    b.textContent = cell ?? ''
+    b.disabled = cell != null || state.winner != null
+    b.onclick = () => move(i)
+    return b
+  }))
+  statusEl.textContent = state.winner === 'draw' ? 'draw.'
+    : state.winner ? `${state.winner} wins.`
+    : `${state.next} to move — you are ${seatEl.value}`
+  logEl.textContent = `${state.applied.length} moves applied, ${state.ignored.length} pieces ignored`
+}
+
+async function refresh() {
+  const pieces = await transport.list(game)
+  state = fold(game, pieces)
+  render()
+}
+
+async function move(cell) {
+  if (state.next !== seatEl.value) return
+  await transport.append(game, { game, seq: state.seq, player: state.next, cell })
+  await refresh()
+}
+
+document.getElementById('new-game').onclick = () => {
+  const id = `game-${Date.now().toString(36)}`
+  params.set('game', id)
+  location.search = params.toString()
+}
+
+transport.onChange?.(refresh)
+await refresh()
+setInterval(refresh, transport.pollMs ?? 0 || 2 ** 31 - 1)
+</script>
+</body>
+</html>
