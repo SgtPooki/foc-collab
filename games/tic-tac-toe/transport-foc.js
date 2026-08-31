@@ -10,7 +10,8 @@
  * player pastes one once; it stays in localStorage, never in a URL.
  */
 import { Synapse } from 'https://esm.sh/@filoz/synapse-sdk@1.2.1'
-import { fromSecp256k1 } from 'https://esm.sh/@filoz/synapse-core/session-key'
+import { calibration } from 'https://esm.sh/@filoz/synapse-core/chains'
+import { AddPiecesPermission, fromSecp256k1 } from 'https://esm.sh/@filoz/synapse-core/session-key'
 import { custom, http } from 'https://esm.sh/viem'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
@@ -40,10 +41,11 @@ export async function createFocTransport(config) {
     throw new Error('foc config needs { dataset, wallet }')
   }
 
-  const transport = http() // chain default RPC
+  const transport = http(calibration.rpcUrls.default.http[0])
   const sessionKey = fromSecp256k1({
     privateKey: getSessionKey(config),
     root: wallet,
+    chain: calibration,
     transport,
   })
   await sessionKey.syncExpirations()
@@ -51,9 +53,12 @@ export async function createFocTransport(config) {
   // A bare-address account requires a custom() transport wrap (SDK quirk).
   const synapse = Synapse.create({
     account: wallet,
-    transport: custom({ request: transport({ retryCount: 0 }).request }),
+    chain: calibration,
+    transport: custom({ request: transport({ chain: calibration, retryCount: 0 }).request }),
     sessionKey,
     source: 'foc-collab-tictactoe',
+    // The key is add-only by design; default validation demands all four.
+    requiredPermissions: [AddPiecesPermission],
   })
   const ctx = await synapse.storage.createContext({ dataSetId })
 
