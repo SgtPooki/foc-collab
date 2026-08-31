@@ -29,9 +29,14 @@ Idea and mini-plan: [Notion — viewer saves for published artifacts](https://ap
 npx serve games/tic-tac-toe   # any static server works
 ```
 
-Open the URL in two tabs, pick X in one and O in the other, play. The
-`local` transport syncs through BroadcastChannel; the fold logic exercised
-is byte-identical to what the `foc` transport uses.
+Open the URL in two tabs. In one, create a game from the lobby and copy the
+invite link; open it in the other tab and join as O. The `local` transport
+syncs through BroadcastChannel with per-tab player identity; the fold logic
+exercised is byte-identical to what the `foc` transport uses.
+
+The published (shared-storage) build is the same page with an embedded
+`foc-config` JSON block naming the shared data set — no query-param
+configuration; the only URL parameter is `?game=<id>` in invite links.
 
 ## Setup for the storage-backed pieces
 

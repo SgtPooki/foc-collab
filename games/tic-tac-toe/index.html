@@ -3,91 +3,138 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>tic-tac-toe on a move log</title>
+<title>tic-tac-toe on a piece log</title>
 <style>
   :root { color-scheme: light dark; --line: #8884; --accent: #2f6fed; }
   body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; }
-  main { text-align: center; padding: 1rem; }
+  main { text-align: center; padding: 1rem; max-width: 36rem; }
   h1 { font-size: 1.1rem; font-weight: 600; }
+  a { color: var(--accent); }
+  .meta { font-size: 0.8rem; opacity: 0.7; }
+  button { padding: 0.35rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: transparent; font: inherit; cursor: pointer; }
   #board { display: grid; grid-template-columns: repeat(3, 84px); gap: 6px; justify-content: center; margin: 1rem 0; }
-  #board button { height: 84px; font-size: 2.2rem; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
-  #board button:disabled { cursor: default; opacity: 0.9; }
+  #board button { height: 84px; font-size: 2.2rem; border-radius: 10px; }
+  #games { list-style: none; padding: 0; text-align: left; }
+  #games li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.45rem 0.2rem; border-bottom: 1px solid var(--line); }
   #status { min-height: 1.5em; }
-  .meta { font-size: 0.8rem; opacity: 0.7; max-width: 34rem; margin: 0 auto; }
-  #controls { margin: 0.5rem 0 1rem; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
-  select, button.ctl { padding: 0.3rem 0.6rem; border-radius: 8px; border: 1px solid var(--line); background: transparent; font: inherit; cursor: pointer; }
+  .row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.8rem 0; flex-wrap: wrap; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <h1>tic-tac-toe, event-sourced</h1>
-  <p class="meta">Every move is an appended JSON piece. The board is a deterministic
-  fold over the ordered move log: illegal or out-of-turn pieces are ignored by
-  every client computing the same fold. Nothing is ever mutated.</p>
-  <div id="controls">
-    <select id="seat"><option value="X">play as X</option><option value="O">play as O</option></select>
-    <button class="ctl" id="new-game">new game</button>
-    <span id="transport-label" class="meta"></span>
-  </div>
-  <div id="board"></div>
-  <p id="status"></p>
-  <p class="meta" id="log-info"></p>
+  <p class="meta">Every game and every move is an appended JSON piece in one shared
+  log. Lobby and boards are a deterministic fold over that log: illegal,
+  out-of-turn, and impostor pieces are ignored by every client computing the
+  same fold. Nothing is ever mutated.</p>
+  <p class="meta" id="transport-label"></p>
+
+  <section id="lobby" hidden>
+    <div class="row"><button id="create">create a game</button></div>
+    <ul id="games"></ul>
+    <p class="meta" id="lobby-empty" hidden>No games yet — create the first one.</p>
+  </section>
+
+  <section id="game" hidden>
+    <div class="row">
+      <a href="?">← lobby</a>
+      <button id="share">copy invite link</button>
+      <button id="join" hidden>join as O</button>
+    </div>
+    <div id="board"></div>
+    <p id="status"></p>
+    <p class="meta" id="log-info"></p>
+  </section>
 </main>
 
 <script type="module">
-import { fold } from './fold.js'
+import { fold, lobby, seatOf, status } from './fold.js'
 import { createTransport } from './transport.js'
 
-// A transport appends move pieces and lists all pieces for a game, in a
-// stable order. Which backend (local tab-to-tab, or a shared data set on
-// Filecoin Onchain Cloud) is chosen by transport.js from the URL.
-const params = new URLSearchParams(location.search)
-const game = params.get('game') ?? 'local-demo'
-const transport = await createTransport(params)
+const transport = await createTransport()
 
-const boardEl = document.getElementById('board')
-const statusEl = document.getElementById('status')
-const logEl = document.getElementById('log-info')
-const seatEl = document.getElementById('seat')
+// Seat identity is a self-chosen random token; the fold assigns X to the
+// game's creator and O to the first different token that joins. On shared
+// storage the token persists per browser; the local demo keeps it per tab
+// so two tabs in one browser can face each other.
+const tokenStore = transport.perTab ? sessionStorage : localStorage
+const token = tokenStore.getItem('ttt-player-token') ?? crypto.randomUUID()
+tokenStore.setItem('ttt-player-token', token)
 document.getElementById('transport-label').textContent = transport.label
 
-let state = fold(game, [])
+const params = new URLSearchParams(location.search)
+const gameId = params.get('game')
+const $ = (id) => document.getElementById(id)
 
-function render() {
-  boardEl.replaceChildren(...state.board.map((cell, i) => {
-    const b = document.createElement('button')
-    b.textContent = cell ?? ''
-    b.disabled = cell != null || state.winner != null
-    b.onclick = () => move(i)
-    return b
+let pieces = []
+
+function renderLobby() {
+  $('lobby').hidden = false
+  const games = lobby(pieces)
+  $('lobby-empty').hidden = games.length > 0
+  $('games').replaceChildren(...games.map((g) => {
+    const li = document.createElement('li')
+    const a = document.createElement('a')
+    a.href = `?game=${encodeURIComponent(g.game)}`
+    a.textContent = g.name ?? g.game
+    const span = document.createElement('span')
+    span.className = 'meta'
+    const mine = seatOf(g, token)
+    span.textContent = status(g) + (mine ? ` — you are ${mine}` : '')
+    li.append(a, span)
+    return li
   }))
-  statusEl.textContent = state.winner === 'draw' ? 'draw.'
-    : state.winner ? `${state.winner} wins.`
-    : `${state.next} to move — you are ${seatEl.value}`
-  logEl.textContent = `${state.applied.length} moves applied, ${state.ignored.length} pieces ignored`
 }
 
+function renderGame() {
+  $('game').hidden = false
+  const state = fold(gameId, pieces)
+  const seat = seatOf(state, token)
+  const joinable = seat == null && state.seats.X != null && state.seats.O == null
+  $('join').hidden = !joinable
+  $('board').replaceChildren(...state.board.map((cell, i) => {
+    const b = document.createElement('button')
+    b.textContent = cell ?? ''
+    b.disabled = cell != null || state.winner != null || seat !== state.next || state.seats.O == null
+    b.onclick = () => append({ v: 1, type: 'move', game: gameId, token, seq: state.seq, cell: i })
+    return b
+  }))
+  $('status').textContent = status(state)
+    + (seat ? ` — you are ${seat}` : joinable ? ' — join to play' : ' — spectating')
+  $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
+}
+
+const render = () => (gameId == null ? renderLobby() : renderGame())
+
 async function refresh() {
-  const pieces = await transport.list(game)
-  state = fold(game, pieces)
+  pieces = await transport.list()
   render()
 }
 
-async function move(cell) {
-  if (state.next !== seatEl.value) return
-  await transport.append(game, { game, seq: state.seq, player: state.next, cell })
+async function append(piece) {
+  await transport.append(piece)
   await refresh()
 }
 
-document.getElementById('new-game').onclick = () => {
-  const id = `game-${Date.now().toString(36)}`
-  params.set('game', id)
-  location.search = params.toString()
+$('create').onclick = async () => {
+  const name = prompt('Name the game (optional):')?.trim() || undefined
+  const game = `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  await append({ v: 1, type: 'create', game, token, name })
+  location.search = `?game=${encodeURIComponent(game)}`
+}
+
+$('join').onclick = () => append({ v: 1, type: 'join', game: gameId, token })
+
+$('share').onclick = async () => {
+  await navigator.clipboard.writeText(location.href)
+  $('share').textContent = 'copied!'
+  setTimeout(() => { $('share').textContent = 'copy invite link' }, 1500)
 }
 
 transport.onChange?.(refresh)
 await refresh()
-setInterval(refresh, transport.pollMs ?? 0 || 2 ** 31 - 1)
+if (transport.pollMs) setInterval(refresh, transport.pollMs)
 </script>
 </body>
 </html>

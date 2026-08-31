@@ -1,29 +1,45 @@
 /**
- * A transport stores move pieces for a game and returns them in a stable
- * total order. The fold does the rest; transports never interpret moves.
+ * A transport appends pieces to one shared log and lists the whole log in
+ * a stable total order. The fold does the rest; transports never
+ * interpret pieces.
  *
  * Interface:
- *   label: string                       — shown in the UI
- *   append(game, move): Promise<void>   — persist one move piece
- *   list(game): Promise<move[]>         — all pieces, stable order
- *   onChange?(cb): void                 — push notification (optional)
- *   pollMs?: number                     — poll interval when no push (optional)
+ *   label: string                 — shown in the UI
+ *   append(piece): Promise<void>  — persist one piece
+ *   list(): Promise<piece[]>      — all pieces, stable order
+ *   onChange?(cb): void           — push notification (optional)
+ *   pollMs?: number               — poll interval when no push (optional)
+ *
+ * Which backend runs is decided by the page itself: a published page
+ * carries an embedded config block naming its shared data set, so it uses
+ * shared storage on Filecoin Onchain Cloud; without one (local dev) the
+ * log lives in this browser and syncs tab-to-tab.
+ *
+ *   <script type="application/json" id="foc-config">
+ *     { "dataset": 123, "wallet": "0x…", "sessionKey": "0x…"? }
+ *   </script>
+ *
+ * The publish flow injects that block; sessionKey is optional and only
+ * ever a short-lived key from a throwaway wallet (see docs/FEASIBILITY.md
+ * on blast radius). Without it, players paste their own key once
+ * (prompted, kept in localStorage).
  */
 
-/** Same-browser demo transport: localStorage log + BroadcastChannel push. */
+/** Same-browser demo transport: one localStorage log + BroadcastChannel push. */
 function localTransport() {
-  const key = (game) => `ttt:${game}`
-  const channel = new BroadcastChannel('ttt-moves')
+  const KEY = 'ttt:log'
+  const channel = new BroadcastChannel('ttt-pieces')
   return {
     label: 'local (two tabs, same browser)',
-    async append(game, move) {
-      const log = JSON.parse(localStorage.getItem(key(game)) ?? '[]')
-      log.push(move)
-      localStorage.setItem(key(game), JSON.stringify(log))
-      channel.postMessage(game)
+    perTab: true, // player tokens per tab, so one browser can hold both seats
+    async append(piece) {
+      const log = JSON.parse(localStorage.getItem(KEY) ?? '[]')
+      log.push(piece)
+      localStorage.setItem(KEY, JSON.stringify(log))
+      channel.postMessage(null)
     },
-    async list(game) {
-      return JSON.parse(localStorage.getItem(key(game)) ?? '[]')
+    async list() {
+      return JSON.parse(localStorage.getItem(KEY) ?? '[]')
     },
     onChange(cb) {
       channel.onmessage = () => cb()
@@ -31,17 +47,19 @@ function localTransport() {
   }
 }
 
-/**
- * Shared-storage transport: each move is one piece added to a data set on
- * Filecoin Onchain Cloud with a session key; list() enumerates the data
- * set's pieces in piece-id order (the chain is the ordering authority).
- * Wired up by the FOC spike — see docs/FEASIBILITY.md.
- */
-async function focTransport(params) {
-  const { createFocTransport } = await import('./transport-foc.js')
-  return createFocTransport(params)
+export function pageConfig() {
+  const el = document.getElementById('foc-config')
+  if (el == null) return null
+  try {
+    return JSON.parse(el.textContent)
+  } catch {
+    return null
+  }
 }
 
-export async function createTransport(params) {
-  return params.get('transport') === 'foc' ? focTransport(params) : localTransport()
+export async function createTransport() {
+  const config = pageConfig()
+  if (config == null) return localTransport()
+  const { createFocTransport } = await import('./transport-foc.js')
+  return createFocTransport(config)
 }

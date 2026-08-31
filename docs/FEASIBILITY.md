@@ -85,10 +85,15 @@ Consequences:
    `filecoin-pin session create`; source `config.env` + `.env` first).
 3. `node scripts/spike-list-pieces.mjs <dataSetId>` — enumerate + fetch,
    keyless.
-4. Serve `games/tic-tac-toe/` and open two browsers with
-   `?transport=foc&dataset=<id>&wallet=<owner>`; paste a session key in
-   each (prompted once, stored in localStorage, never in the URL or HTML).
-   Play.
+4. Add an embedded config block to the page (`<script
+   type="application/json" id="foc-config">{ "dataset": <id>, "wallet":
+   "<owner>" }</script>`) and serve `games/tic-tac-toe/`. In browser A,
+   create a game from the lobby and copy the invite link; in browser B,
+   open it and join as O. Session keys are pasted once per browser
+   (prompted, stored in localStorage, never in a URL) — or embedded in the
+   config for the zero-setup mode 1 demo, throwaway wallet only. Games
+   themselves are pieces (`create`/`join`/`move`), so the lobby lists every
+   game ever played by folding the same log.
 5. Publish the game directory with the repo's `publish` skill and repeat
    step 4 from the published URL — that is the demo to screen-record.
 
