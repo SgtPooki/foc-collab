@@ -57,10 +57,20 @@ const transport = await createTransport()
 
 // Seat identity is a keypair generated in this browser: the public key is
 // the token seats are assigned to, and every appended piece is signed, so
-// log readers cannot impersonate a player. On shared storage the identity
-// persists per browser; the local demo keeps it per tab so two tabs in
-// one browser can face each other.
-const identity = await loadIdentity(transport.perTab ? sessionStorage : localStorage)
+// log readers cannot impersonate a player. The private key is a
+// non-extractable CryptoKey in IndexedDB. On shared storage one identity
+// serves the whole browser; the local demo scopes identities by a per-tab
+// id so two tabs in one browser can face each other (and keep their seats
+// across reloads).
+function tabScope() {
+  let id = sessionStorage.getItem('ttt-tab-id')
+  if (id == null) {
+    id = crypto.randomUUID()
+    sessionStorage.setItem('ttt-tab-id', id)
+  }
+  return id
+}
+const identity = await loadIdentity(transport.perTab ? tabScope() : 'shared')
 const token = identity.token
 document.getElementById('transport-label').textContent = transport.label
 

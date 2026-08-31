@@ -1,7 +1,8 @@
 /**
  * Player identity: a browser-generated ECDSA P-256 keypair. The public key
  * (base64url of the raw point) IS the player token that seats are assigned
- * to; the private key never leaves the player's browser. Every piece is
+ * to; the private key is non-extractable and lives in IndexedDB, so it
+ * never leaves the player's browser — not even as bytes script can read. Every piece is
  * signed over a canonical serialization that includes the game id and the
  * token, so a log reader can neither forge pieces as another player nor
  * replay a signed piece into a different game. Verification is
@@ -32,35 +33,44 @@ export function canon(value) {
 }
 
 export async function generateIdentity() {
-  const pair = await subtle.generateKey(ALG, true, ['sign', 'verify'])
+  // Non-extractable: the private key can sign but its material can never
+  // be read back out by script (the public key is always exportable).
+  const pair = await subtle.generateKey(ALG, false, ['sign', 'verify'])
   return {
     token: toB64u(await subtle.exportKey('raw', pair.publicKey)),
     privateKey: pair.privateKey,
-    privateJwk: await subtle.exportKey('jwk', pair.privateKey),
   }
 }
 
+const DB = 'ttt-identity'
+const STORE = 'keys'
+
+function idbRequest(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function openDb() {
+  const request = indexedDB.open(DB, 1)
+  request.onupgradeneeded = () => request.result.createObjectStore(STORE)
+  return idbRequest(request)
+}
+
 /**
- * Loads (or creates and persists) this player's identity. `store` is any
- * Storage (localStorage for shared play, sessionStorage for the per-tab
- * local demo). Only the private JWK is stored; hardened deployments would
- * keep a non-extractable CryptoKey in IndexedDB instead.
+ * Loads (or creates and persists) this player's identity for a scope
+ * ('shared' for real play; a per-tab id for the local demo). The whole
+ * identity — non-extractable CryptoKey included — is stored in IndexedDB
+ * via structured clone, so no key material ever exists as text.
  */
-export async function loadIdentity(store, key = 'ttt-identity') {
-  const saved = store.getItem(key)
-  if (saved != null) {
-    try {
-      const jwk = JSON.parse(saved)
-      const privateKey = await subtle.importKey('jwk', jwk, ALG, true, ['sign'])
-      const publicKey = await subtle.importKey(
-        'jwk', { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y }, ALG, true, ['verify'])
-      return { token: toB64u(await subtle.exportKey('raw', publicKey)), privateKey }
-    } catch {
-      // fall through and mint a fresh identity
-    }
-  }
+export async function loadIdentity(scope = 'shared') {
+  const db = await openDb()
+  const key = `identity:${scope}`
+  const saved = await idbRequest(db.transaction(STORE).objectStore(STORE).get(key))
+  if (saved?.privateKey != null && typeof saved?.token === 'string') return saved
   const identity = await generateIdentity()
-  store.setItem(key, JSON.stringify(identity.privateJwk))
+  await idbRequest(db.transaction(STORE, 'readwrite').objectStore(STORE).put(identity, key))
   return identity
 }
 
