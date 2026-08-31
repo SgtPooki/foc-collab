@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test games/tic-tac-toe/fold.test.js"
+    "test": "node --test games/tic-tac-toe/*.test.js"
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.8.1",
