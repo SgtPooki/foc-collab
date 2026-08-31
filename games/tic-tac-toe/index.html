@@ -50,17 +50,18 @@
 
 <script type="module">
 import { fold, lobby, seatOf, status } from './fold.js'
+import { loadIdentity, signPiece, verifyAll } from './identity.js'
 import { createTransport } from './transport.js'
 
 const transport = await createTransport()
 
-// Seat identity is a self-chosen random token; the fold assigns X to the
-// game's creator and O to the first different token that joins. On shared
-// storage the token persists per browser; the local demo keeps it per tab
-// so two tabs in one browser can face each other.
-const tokenStore = transport.perTab ? sessionStorage : localStorage
-const token = tokenStore.getItem('ttt-player-token') ?? crypto.randomUUID()
-tokenStore.setItem('ttt-player-token', token)
+// Seat identity is a keypair generated in this browser: the public key is
+// the token seats are assigned to, and every appended piece is signed, so
+// log readers cannot impersonate a player. On shared storage the identity
+// persists per browser; the local demo keeps it per tab so two tabs in
+// one browser can face each other.
+const identity = await loadIdentity(transport.perTab ? sessionStorage : localStorage)
+const token = identity.token
 document.getElementById('transport-label').textContent = transport.label
 
 const params = new URLSearchParams(location.search)
@@ -97,7 +98,7 @@ function renderGame() {
     const b = document.createElement('button')
     b.textContent = cell ?? ''
     b.disabled = cell != null || state.winner != null || seat !== state.next || state.seats.O == null
-    b.onclick = () => append({ v: 1, type: 'move', game: gameId, token, seq: state.seq, cell: i })
+    b.onclick = () => append({ v: 1, type: 'move', game: gameId, seq: state.seq, cell: i })
     return b
   }))
   $('status').textContent = status(state)
@@ -108,23 +109,24 @@ function renderGame() {
 const render = () => (gameId == null ? renderLobby() : renderGame())
 
 async function refresh() {
-  pieces = await transport.list()
+  // Forged or tampered pieces become nulls, which the fold ignores.
+  pieces = await verifyAll(await transport.list())
   render()
 }
 
-async function append(piece) {
-  await transport.append(piece)
+async function append(payload) {
+  await transport.append(await signPiece(payload, identity))
   await refresh()
 }
 
 $('create').onclick = async () => {
   const name = prompt('Name the game (optional):')?.trim() || undefined
   const game = `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-  await append({ v: 1, type: 'create', game, token, name })
+  await append({ v: 1, type: 'create', game, name })
   location.search = `?game=${encodeURIComponent(game)}`
 }
 
-$('join').onclick = () => append({ v: 1, type: 'join', game: gameId, token })
+$('join').onclick = () => append({ v: 1, type: 'join', game: gameId })
 
 $('share').onclick = async () => {
   await navigator.clipboard.writeText(location.href)

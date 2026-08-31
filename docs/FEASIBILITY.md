@@ -49,6 +49,21 @@ account-wide, not data-set-scoped. Details below.
   browser via esm.sh — which keeps published game pages self-contained
   single files.
 
+## Player identity: signed pieces, not bare tokens
+
+The log is public by construction, so a bare random token as player id
+would be copyable by any reader — a game-4 spectator could append moves as
+a game-1 player. Instead each browser generates an ECDSA P-256 keypair
+(`games/tic-tac-toe/identity.js`): the public key is the token seats are
+assigned to, every piece is signed over a canonical serialization that
+includes the game id, and every client verifies signatures between
+fetching and folding. Forged, tampered, and cross-game-replayed pieces
+fail verification identically everywhere (tested in `identity.test.js`,
+including an end-to-end takeover attempt). Note this is game-level
+integrity only: the shared session key still gates who can *write* to the
+data set at all, and anyone can still burn the owner's storage spend with
+junk pieces — that remains the account-wide-grant problem below.
+
 ## The finding that changes the design: grant scope is account-wide
 
 Open question 1 in the idea doc asked whether authorization is add-piece
