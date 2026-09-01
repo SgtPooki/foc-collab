@@ -14,6 +14,15 @@
   button { padding: 0.35rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: transparent; font: inherit; cursor: pointer; }
   #board { display: grid; grid-template-columns: repeat(3, 84px); gap: 6px; justify-content: center; margin: 1rem 0; }
   #board button { height: 84px; font-size: 2.2rem; border-radius: 10px; }
+  #board button.pending { opacity: 0.55; animation: pulse 1.1s ease-in-out infinite; border-color: var(--accent); }
+  #board button.last { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  #status.error { color: #e5534b; }
+  #status.busy::after, #status.waiting::after {
+    content: ''; display: inline-block; width: 1.2em; text-align: left;
+    animation: dots 1.5s steps(4, end) infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
   #games { list-style: none; padding: 0; text-align: left; }
   #games li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.45rem 0.2rem; border-bottom: 1px solid var(--line); }
   #status { min-height: 1.5em; }
@@ -89,7 +98,10 @@ const $ = (id) => document.getElementById(id)
 
 let pieces = []
 let busy = null // label of the in-flight append, e.g. 'placing your X'
+let busyStage = null // transport progress: uploading / stored / confirming
+let pendingMove = null // { cell, seat } shown optimistically on the board
 let lastError = null
+let prevBoard = null // to highlight the opponent's latest move
 
 function renderLobby() {
   $('lobby').hidden = false
@@ -125,21 +137,39 @@ function renderGame() {
     b.textContent = cell ?? ''
     b.disabled = busy != null || cell != null || state.winner != null
       || seat !== state.next || state.seats.O == null
+    if (pendingMove != null && pendingMove.cell === i && cell == null) {
+      b.textContent = pendingMove.seat
+      b.classList.add('pending')
+    }
+    if (cell != null && prevBoard != null && prevBoard[i] == null) {
+      b.classList.add('last')
+    }
     b.onclick = () => append(
       { v: 1, type: 'move', game: gameId, seq: state.seq, cell: i },
       `placing your ${seat}`,
+      { cell: i, seat },
     )
     return b
   }))
   const yourTurn = seat != null && seat === state.next && state.winner == null && state.seats.O != null
   document.title = yourTurn && busy == null ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
-  $('status').textContent = statusLine(state, seat, joinable)
+  const statusEl = $('status')
+  statusEl.textContent = statusLine(state, seat, joinable)
+  statusEl.classList.toggle('error', busy == null && lastError != null)
+  statusEl.classList.toggle('busy', busy != null)
+  const waitingOnOpponent = busy == null && lastError == null && state.winner == null
+    && seat != null && seat !== state.next && state.seats.O != null
+  statusEl.classList.toggle('waiting', waitingOnOpponent)
   $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
 }
 
 function statusLine(state, seat, joinable) {
-  if (busy != null) return `${busy}… saving to shared storage takes up to a minute — one click is enough`
+  if (busy != null && busyStage != null) return `${busy} — ${busyStage}`
+  if (busy != null) return `${busy}`
   if (lastError != null) return lastError
+  if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
+    return `${status(state)} — you are ${seat}, waiting for your opponent`
+  }
   if (seat != null) return `${status(state)} — you are ${seat}`
   if (joinable) return `${status(state)} — join to play`
   return `${status(state)} — spectating`
@@ -149,23 +179,40 @@ const render = () => (gameId == null ? renderLobby() : renderGame())
 
 async function refresh() {
   // Forged or tampered pieces become nulls, which the fold ignores.
-  pieces = await verifyAll(await transport.list())
+  const next = await verifyAll(await transport.list())
+  if (gameId != null) {
+    const oldBoard = fold(gameId, pieces).board
+    const newBoard = fold(gameId, next).board
+    if (oldBoard.some((cell, i) => cell !== newBoard[i])) prevBoard = oldBoard
+  }
+  pieces = next
   render()
 }
 
-async function append(payload, label) {
+async function append(payload, label, move = null) {
   if (busy != null) return false // one in-flight append at a time
   busy = label
+  busyStage = null
+  pendingMove = move
   lastError = null
   render()
   try {
-    await transport.append(await signPiece(payload, identity))
+    const signed = await signPiece(payload, identity)
+    await transport.append(signed, (stage) => {
+      busyStage = stage
+      render()
+    })
     busy = null
+    busyStage = null
     await refresh()
+    pendingMove = null
+    render()
     return true
   } catch (err) {
     console.error(err)
     busy = null
+    busyStage = null
+    pendingMove = null
     lastError = `could not save (${err?.message?.slice(0, 120) ?? err}) — try again`
     render()
     return false

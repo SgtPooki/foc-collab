@@ -82,8 +82,12 @@ export async function createFocTransport(config) {
   return {
     label: `shared data set #${dataSetId}`,
     pollMs: 8000,
-    async append(piece) {
-      await ctx.upload(encodePiece(piece))
+    async append(piece, onProgress) {
+      onProgress?.('uploading')
+      await ctx.upload(encodePiece(piece), {
+        onStored: () => onProgress?.('stored by provider'),
+        onPiecesAdded: () => onProgress?.('confirming on-chain'),
+      })
     },
     async list() {
       const entries = []

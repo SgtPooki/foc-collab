@@ -5,7 +5,9 @@
  *
  * Interface:
  *   label: string                 — shown in the UI
- *   append(piece): Promise<void>  — persist one piece
+ *   append(piece, onProgress?): Promise<void>
+ *                                 — persist one piece; onProgress receives
+ *                                   short stage strings for the UI
  *   list(): Promise<piece[]>      — all pieces, stable order
  *   onChange?(cb): void           — push notification (optional)
  *   pollMs?: number               — poll interval when no push (optional)
