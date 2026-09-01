@@ -3,273 +3,244 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>FOC Capability Map</title>
+<title>FOC Capability Ladder</title>
 <style>
   :root {
     --bg: #f7f8fa; --panel: #ffffff; --ink: #1a2230; --muted: #5b6577;
     --line: #d9dee8; --accent: #0668d8; --accent-soft: #e3eefc;
-    --shipped: #0e7a4d; --shipped-bg: #e2f4ea;
-    --pattern: #92600a; --pattern-bg: #faf0d8;
-    --gap: #b3223c; --gap-bg: #fbe4e8;
+    --now: #0e7a4d; --now-bg: #e2f4ea;
+    --next: #92600a; --next-bg: #faf0d8;
+    --later: #7a3aa8; --later-bg: #f1e6f9;
     --chip-bg: #eef1f6;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #10141c; --panel: #181e29; --ink: #e8ecf3; --muted: #98a2b5;
       --line: #2a3345; --accent: #4d9bf0; --accent-soft: #16283f;
-      --shipped: #52c98a; --shipped-bg: #12301f;
-      --pattern: #e0b45c; --pattern-bg: #33270e;
-      --gap: #ef7a90; --gap-bg: #3a1620;
+      --now: #52c98a; --now-bg: #12301f;
+      --next: #e0b45c; --next-bg: #33270e;
+      --later: #c890ec; --later-bg: #2c1b3a;
       --chip-bg: #222a3a;
     }
   }
   :root[data-theme="dark"] {
     --bg: #10141c; --panel: #181e29; --ink: #e8ecf3; --muted: #98a2b5;
     --line: #2a3345; --accent: #4d9bf0; --accent-soft: #16283f;
-    --shipped: #52c98a; --shipped-bg: #12301f;
-    --pattern: #e0b45c; --pattern-bg: #33270e;
-    --gap: #ef7a90; --gap-bg: #3a1620;
+    --now: #52c98a; --now-bg: #12301f;
+    --next: #e0b45c; --next-bg: #33270e;
+    --later: #c890ec; --later-bg: #2c1b3a;
     --chip-bg: #222a3a;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
-  }
-  main { max-width: 1080px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-  header h1 { font-size: 1.7rem; margin: 0 0 0.2rem; letter-spacing: -0.01em; }
-  header p { color: var(--muted); margin: 0; max-width: 62ch; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  header h1 { font-size: 1.7rem; margin: 0 0 0.3rem; letter-spacing: -0.01em; }
+  header p { color: var(--muted); margin: 0; max-width: 68ch; }
   .stamp { font: 600 0.72rem/1 ui-monospace, Menlo, monospace; color: var(--muted);
     text-transform: uppercase; letter-spacing: 0.09em; }
 
-  section { margin-top: 2.6rem; }
-  h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
-  .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; max-width: 72ch; }
+  .tier { margin-top: 2.4rem; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 1.4rem 1.5rem 1.5rem; border-top: 4px solid var(--line); }
+  .tier.now { border-top-color: var(--now); }
+  .tier.next { border-top-color: var(--next); }
+  .tier.later { border-top-color: var(--later); }
+  .tier > .band { display: inline-block; padding: 0.16rem 0.6rem; border-radius: 999px;
+    font: 700 0.72rem/1.5 ui-monospace, Menlo, monospace; letter-spacing: 0.05em; }
+  .tier.now .band { color: var(--now); background: var(--now-bg); }
+  .tier.next .band { color: var(--next); background: var(--next-bg); }
+  .tier.later .band { color: var(--later); background: var(--later-bg); }
+  .tier h2 { font-size: 1.2rem; margin: 0.5rem 0 0.3rem; }
+  .tier > p.lede { color: var(--muted); margin: 0 0 1.1rem; max-width: 72ch; }
 
-  .legend { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.8rem 0 0; }
-  .tag { display: inline-block; padding: 0.14rem 0.55rem; border-radius: 999px;
-    font: 600 0.7rem/1.5 ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
-  .tag.shipped { color: var(--shipped); background: var(--shipped-bg); }
-  .tag.pattern { color: var(--pattern); background: var(--pattern-bg); }
-  .tag.gap { color: var(--gap); background: var(--gap-bg); }
+  h3.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--muted); margin: 1.2rem 0 0.5rem; }
+  .caps { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .caps span { border-radius: 8px; padding: 0.32rem 0.7rem; font-size: 0.84rem;
+    font-weight: 600; background: var(--chip-bg); }
+  .tier.now .caps span { background: var(--now-bg); color: var(--now); }
+  .tier.next .caps span { background: var(--next-bg); color: var(--next); }
+  .tier.later .caps span { background: var(--later-bg); color: var(--later); }
 
-  /* build order strip */
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.6rem; counter-reset: step; }
-  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 0.8rem 0.9rem; position: relative; }
-  .step::before { counter-increment: step; content: counter(step);
-    position: absolute; top: 0.7rem; right: 0.8rem;
-    font: 700 0.9rem/1 ui-monospace, Menlo, monospace; color: var(--accent); }
-  .step b { display: block; font-size: 0.92rem; padding-right: 1.2rem; }
-  .step small { color: var(--muted); display: block; margin-top: 0.2rem; }
-  .step .when { margin-top: 0.5rem; }
+  ul.examples { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+  ul.examples li { padding: 0.65rem 0.85rem; border: 1px solid var(--line);
+    border-radius: 9px; font-size: 0.9rem; }
+  ul.examples li b { display: block; font-size: 0.92rem; }
+  ul.examples li small { color: var(--muted); display: block; margin-top: 0.15rem; }
 
-  /* foundation chips */
-  .found { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .found span { background: var(--shipped-bg); color: var(--shipped);
-    border-radius: 8px; padding: 0.3rem 0.65rem; font-size: 0.82rem; font-weight: 600; }
-  .found span em { font-style: normal; font-weight: 400; opacity: 0.85; }
+  .needs { margin-top: 1.2rem; padding: 0.8rem 1rem; border-radius: 9px;
+    background: var(--chip-bg); font-size: 0.85rem; }
+  .needs b { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; }
+  .needs ul { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+  .needs li { margin: 0.15rem 0; }
+  .needs .who { color: var(--muted); }
 
-  /* ask rows */
-  .lane { margin-top: 1.4rem; }
-  .lane h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em;
-    color: var(--muted); margin: 0 0 0.5rem; }
-  .ask { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 0.85rem 1rem; margin-bottom: 0.6rem;
-    display: grid; grid-template-columns: 2.1rem 1fr; gap: 0.2rem 0.8rem; }
-  .ask .rank { grid-row: span 2; font: 700 1.15rem/1.2 ui-monospace, Menlo, monospace;
-    color: var(--accent); }
-  .ask .head { display: flex; align-items: baseline; gap: 0.55rem; flex-wrap: wrap; }
-  .ask .head b { font-size: 0.95rem; }
-  .ask .head .who { color: var(--muted); font-size: 0.75rem; }
-  .ask .why { color: var(--muted); font-size: 0.84rem; max-width: 78ch; }
-  .unlocks { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem;
-    align-items: center; grid-column: 2; }
-  .unlocks::before { content: "unlocks →"; font: 600 0.7rem/1 ui-monospace, Menlo, monospace;
-    color: var(--accent); letter-spacing: 0.05em; margin-right: 0.2rem; }
-  .unlocks span { background: var(--chip-bg); border-radius: 999px;
-    padding: 0.18rem 0.6rem; font-size: 0.76rem; }
-  .unlocks span.hot { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .backfill { margin-top: 1.2rem; border-left: 3px solid var(--later);
+    padding: 0.2rem 0 0.2rem 0.9rem; font-size: 0.9rem; max-width: 74ch; }
 
-  /* flow diagram */
-  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 0.7rem;
-    align-items: stretch; overflow-x: auto; }
-  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    padding: 0.9rem 1rem; min-width: 230px; }
-  .col h3 { margin: 0 0 0.1rem; font-size: 0.9rem; }
-  .col p.cap { color: var(--muted); font-size: 0.76rem; margin: 0 0 0.7rem; }
-  .col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
-  .col li { font-size: 0.83rem; padding: 0.32rem 0.55rem; border-radius: 7px;
-    background: var(--chip-bg); }
-  .col.shipped-col li { background: var(--shipped-bg); }
-  .col.build-col li { background: var(--accent-soft); }
-  .col.ask-col li { background: var(--gap-bg); }
-  .arrow { align-self: center; color: var(--muted); font-size: 1.4rem; padding: 0 0.1rem; }
-
-  footer { margin-top: 3rem; color: var(--muted); font-size: 0.78rem; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: 0.78rem; max-width: 74ch; }
   footer code { font-family: ui-monospace, Menlo, monospace; }
-  @media (max-width: 780px) { .flow { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); justify-self: center; } }
 </style>
 </head>
 <body>
 <main>
 <header>
-  <p class="stamp">foc-collab · research synthesis · 2026-09-01</p>
-  <h1>FOC Capability Map</h1>
-  <p>What the substrate can do today, what we build next, and which missing
-  features unlock which products. Every status below was verified against
-  filecoin-services and synapse-sdk source (citations in
-  <code>research/clusters/</code>).</p>
-  <div class="legend">
-    <span class="tag shipped">SHIPPED — works today</span>
-    <span class="tag pattern">PATTERN — possible with custom contract / app code</span>
-    <span class="tag gap">GAP — needs filecoin-services / SDK work</span>
-  </div>
+  <p class="stamp">filecoin onchain cloud · capability review · 2026-09-01</p>
+  <h1>FOC Capability Ladder</h1>
+  <p>What kinds of applications the platform can power today, what one round of
+  tooling work adds, and what the platform features after that make possible.
+  Every claim below was verified against the shipped contracts and SDK; the
+  engineering detail lives in <code>research/</code> in this repo.</p>
 </header>
 
-<section>
-  <h2>The pipeline at a glance</h2>
-  <p class="sub">The shipped foundation feeds two spikes we own; the feature asks widen what those spikes can carry.</p>
-  <div class="flow">
-    <div class="col shipped-col">
-      <h3>Shipped foundation</h3>
-      <p class="cap">calibnet v1.4.0 · mainnet imminent</p>
-      <ul>
-        <li>Programmable per-data-set authorizer (150M gas, state-mutating)</li>
-        <li>Removals AND termination authorizer-gated → retention pattern</li>
-        <li>Permissionless attributed deposits (feed anything, on-chain receipts)</li>
-        <li>Signed piece metadata, emitted per piece</li>
-        <li>Batched addPieces (one signer per batch)</li>
-        <li>Cheap data sets (~0.62 USDFC lockup, recoverable)</li>
-        <li>FilBeam CDN reads · cursor piece listing</li>
-        <li>Proven fold/identity stack (tic-tac-toe live)</li>
-      </ul>
-    </div>
-    <div class="arrow">→</div>
-    <div class="col build-col">
-      <h3>We build (in order)</h3>
-      <p class="cap">no external dependencies for 1–3</p>
-      <ul>
-        <li>1 · Corgi v1 — deposits = feeding, runway = health</li>
-        <li>2 · Authorizer spike — BYO-signer writes + declared-metadata rules</li>
-        <li>3 · Baton v0 + human-in-the-loop relay demo</li>
-        <li>4 · Paint war (birthday, Oct 15 — reviewed scope)</li>
-        <li>5 · Signal-gated: mosaic · jukebox · bounty economy</li>
-      </ul>
-    </div>
-    <div class="arrow">→</div>
-    <div class="col ask-col">
-      <h3>Asks widen the road</h3>
-      <p class="cap">to filecoin-services / synapse-sdk</p>
-      <ul>
-        <li>Crowd scale (1000s of writers)</li>
-        <li>Wallet-free users (passkeys)</li>
-        <li>Consumer apps that can search &amp; scale reads</li>
-        <li>Agent-side economics (bonds, fees)</li>
-        <li>Compliance-grade retention products</li>
-      </ul>
-    </div>
+<section class="tier now">
+  <span class="band">TIER 1 · BUILDABLE TODAY</span>
+  <h2>Shared applications with no servers at all</h2>
+  <p class="lede">FOC storage plus the new per-data-set access rules
+  (shipped to calibration, mainnet release in progress) already support
+  applications where the storage network is the entire backend: no app
+  server, no database, no host to keep running.</p>
+
+  <h3 class="label">Functionality available now</h3>
+  <div class="caps">
+    <span>Shared state any browser can read and replay identically</span>
+    <span>Anyone can fund a thing's storage, with attributed on-chain receipts</span>
+    <span>Write rules enforced by contract (allowlists, rate limits, roles)</span>
+    <span>Deletion and shutdown vetoed until a chosen date</span>
+    <span>CDN-speed public reads</span>
+  </div>
+
+  <h3 class="label">Examples</h3>
+  <ul class="examples">
+    <li><b>A shared thing that lives only while people pay to keep it alive</b>
+      <small>Its health bar is its real storage funding; every feeding is a
+      payment anyone can verify. This is the mascot idea from standup: if the
+      community stops funding it, it visibly declines, and the protocol gives
+      a roughly 30-day window before the data is at risk.</small></li>
+    <li><b>Turn-based multiplayer between any browsers on Earth</b>
+      <small>Already live: we have a working two-player game on calibration
+      where every move is a signed record and both players' browsers compute
+      the same board. Moves take 30 to 60 seconds to land, which suits
+      turn-based play.</small></li>
+    <li><b>Multi-step handoffs with signed receipts at every step</b>
+      <small>Work passes between people or AI agents; each step is signed,
+      ordered, and independently verifiable. Today this works among
+      participants we set up ourselves.</small></li>
+    <li><b>Records locked against deletion until a chosen year</b>
+      <small>An access-rule contract can refuse both deletion and shutdown
+      until a set date. At current pricing, about $1,000 keeps a terabyte
+      provably funded for roughly 16 years, and anyone can check the balance.</small></li>
+  </ul>
+</section>
+
+<section class="tier next">
+  <span class="band">TIER 2 · ONE ROUND OF TOOLING AWAY</span>
+  <h2>Open participation: strangers join from a link</h2>
+  <p class="lede">The contracts already permit public, rule-governed writing.
+  What is missing is tooling: the SDK has no ergonomic path to the new access
+  rules, and there is no way to search or filter stored records without
+  downloading everything. Close those two gaps and applications stop being
+  invite-only.</p>
+
+  <h3 class="label">Functionality this adds</h3>
+  <div class="caps">
+    <span>Anyone with the link can contribute, under contract-enforced rules</span>
+    <span>Content that is searchable and filterable at consumer scale</span>
+    <span>Live activity feeds instead of polling</span>
+    <span>Embeddable views for any website</span>
+  </div>
+
+  <h3 class="label">What that looks like</h3>
+  <ul class="examples">
+    <li><b>Public collaborative artifacts</b>
+      <small>A shared canvas, board, or timeline the whole internet can write
+      to, one contribution per person per time window, with the rule enforced
+      by contract rather than by a moderator watching.</small></li>
+    <li><b>Event experiences gated by attendance</b>
+      <small>Check in at a conference and your badge lets you contribute to a
+      collective artifact that is stored permanently afterward. Part of the
+      ticket price can fund that storage for decades.</small></li>
+    <li><b>Comments and guest notes on any published page</b>
+      <small>The original idea this work started from: viewers of a static
+      page leave notes that persist, with no comment server anywhere.</small></li>
+    <li><b>Community-curated media queues</b>
+      <small>Shared playlists and reading lists anyone can add to, with the
+      catalog of allowed entries enforced by contract.</small></li>
+  </ul>
+
+  <div class="needs">
+    <b>What has to be built</b>
+    <ul>
+      <li>SDK support for the new access-rule contracts <span class="who">(synapse-sdk; today the capability is contract-only)</span></li>
+      <li>Indexed reads: list and filter records by their labels without downloading everything <span class="who">(SDK front-end for events that indexers already capture)</span></li>
+      <li>Restore the sponsored-writes example contract <span class="who">(merged in August, reverted only for release timing)</span></li>
+    </ul>
   </div>
 </section>
 
-<section>
-  <h2>Build order</h2>
-  <p class="sub">Sequenced by dependency and date, not preference.</p>
-  <div class="steps">
-    <div class="step"><b>Corgi v1</b><small>Health = funding runway, feeding = attributed deposits, ~30-day memorial window is protocol truth. Zero contracts, zero write path.</small><span class="tag shipped when">ship this week</span></div>
-    <div class="step"><b>Authorizer spike</b><small>Custom authorizer on calibration; hand-rolled BYO-signer write path; declared-coords metadata pattern. Unblocks everything below.</small><span class="tag pattern when">now, parallel</span></div>
-    <div class="step"><b>Baton v0 + HITL</b><small>Agent drafts → agent reviews → human signs acceptance. Receipt chain + verify CLI. Targets the provenance GTM wedge.</small><span class="tag pattern when">next</span></div>
-    <div class="step"><b>Paint war</b><small>Bounded canvas, contract-law cooldowns (~$0.011/pixel is fine at event scale), blocklist, budget, snapshots, timelapse.</small><span class="tag pattern when">birthday · Oct 15</span></div>
-    <div class="step"><b>Signal-gated</b><small>PoA mosaic (needs an event) · jukebox (builder story) · bounty market (needs a design partner) · park v2 tiers.</small><span class="tag gap when">on pull, not push</span></div>
-  </div>
-</section>
+<section class="tier later">
+  <span class="band">TIER 3 · PLATFORM FEATURES AFTER THAT</span>
+  <h2>Economies inside the applications, at consumer scale</h2>
+  <p class="lede">With tier 2 in place, three platform features turn these
+  applications from demos into products: payment hooks, passkey sign-in, and
+  cheaper crowd writes. Each one also upgrades everything in tiers 1 and 2.</p>
 
-<section>
-  <h2>Feature asks, ranked — and what each unlocks</h2>
-  <p class="sub">Merged from four cluster investigations (canvas, living-world, baton/agents, social). Rank weighs how many product lines each ask unblocks.</p>
-
-  <div class="lane">
-    <h3>Write path</h3>
-    <div class="ask"><div class="rank">1</div>
-      <div class="head"><b>SDK authorizer path</b><span class="tag gap">GAP</span><span class="who">all four clusters</span></div>
-      <div class="why">setDataSetAuthorizer helper, authorizer-aware presign/commit, bring-your-own-signer writes. Today: raw ABI + hand-rolled extraData.</div>
-      <div class="unlocks"><span class="hot">every authorizer product</span><span>paint war</span><span>mosaic</span><span>dungeon</span><span>baton v1</span><span>guestbook</span><span>park v2</span></div>
-    </div>
-    <div class="ask"><div class="rank">3</div>
-      <div class="head"><b>Multi-signer batched AddPieces</b><span class="tag gap">GAP</span><span class="who">canvas #1</span></div>
-      <div class="why">One signature per batch today → contract-enforced per-player actions cost ~$0.011 + one tx each. Vector of independently signed sub-ops collapses it to ~$0.003.</div>
-      <div class="unlocks"><span class="hot">crowd scale</span><span>r/place-scale canvases</span><span>1000s of concurrent writers</span><span>affordable contract-law cooldowns</span></div>
-    </div>
-    <div class="ask"><div class="rank">10</div>
-      <div class="head"><b>Piece-metadata headroom</b><span class="tag gap">GAP</span><span class="who">baton #4</span></div>
-      <div class="why">3 keys × 96 B = 384 B total; too tight for DAG edges and compliance fields. Interim: digest-only packing.</div>
-      <div class="unlocks"><span>DAG relays</span><span>fan-out/fan-in pipelines</span><span>richer compliance receipts</span></div>
-    </div>
+  <h3 class="label">Functionality this adds</h3>
+  <div class="caps">
+    <span>Paid actions: entry fees, upgrades, bounties, auctions</span>
+    <span>Sign in with a passkey, no wallet or crypto knowledge</span>
+    <span>Thousands of simultaneous contributors at around a third of a cent per action</span>
+    <span>AI agents that pay and get paid without a human in the loop</span>
   </div>
 
-  <div class="lane">
-    <h3>Read path</h3>
-    <div class="ask"><div class="rank">2</div>
-      <div class="head"><b>Indexed read layer</b><span class="tag gap">GAP</span><span class="who">social #1 · world #1 · canvas #5</span></div>
-      <div class="why">One product, three faces: metadata-filtered piece listing, attributed account-activity history, piece provenance (id → epoch/signer/tx). Events exist and are already indexed by Goldsky/foc-observer — the ask is SDK-fronting them. Plus wss push helpers.</div>
-      <div class="unlocks"><span class="hot">consumer-grade apps</span><span>search &amp; threads</span><span>corgi feed log</span><span>timelapse timing</span><span>verify tooling</span><span>embeddable widgets</span><span>agent push wakeups</span></div>
-    </div>
-    <div class="ask"><div class="rank">8</div>
-      <div class="head"><b>Consumer-scale read billing</b><span class="tag gap">GAP</span><span class="who">social #5</span></div>
-      <div class="why">FilBeam egress bills the payer only — a popular page is an unbounded bandwidth bill. Per-reader or sponsored egress; plus author-attributed removal ergonomics.</div>
-      <div class="unlocks"><span>popular consumer apps</span><span>jukebox at scale</span><span>comments-for-any-site</span></div>
-    </div>
+  <h3 class="label">What that looks like</h3>
+  <ul class="examples">
+    <li><b>Applications that fund their own storage</b>
+      <small>Entry fees and upgrades flow back to the account paying the
+      storage bill. The app pays for itself; the operator never holds user
+      funds.</small></li>
+    <li><b>Work marketplaces with built-in escrow</b>
+      <small>Payment for a step releases when the next participant accepts
+      the work, with a protocol fee taken natively. The payment rails
+      shipped with FOC already support this shape; it needs a hardened
+      reference contract, not new protocol.</small></li>
+    <li><b>Consumer-scale participation</b>
+      <small>Contract-enforced write rules currently cost about a cent per
+      contribution because each one is its own transaction. Batching
+      independently signed contributions cuts that to roughly a third of a
+      cent and removes the throughput ceiling.</small></li>
+    <li><b>Compliance-grade record keeping as a product</b>
+      <small>The deletion-veto pattern from tier 1, packaged so a buyer
+      audits a product instead of a bespoke contract: pay once, retain
+      provably for N years.</small></li>
+  </ul>
+
+  <div class="needs">
+    <b>What has to be built</b>
+    <ul>
+      <li>Charge-the-writer payment hooks and a reference escrow contract <span class="who">(filecoin-pay + filecoin-services)</span></li>
+      <li>Passkey signature support proven on-chain <span class="who">(the access-rule design already anticipates it; the gas cost needs measuring)</span></li>
+      <li>Batched writes carrying many individual signatures in one transaction <span class="who">(filecoin-services)</span></li>
+      <li>Let delegated agent keys make payments <span class="who">(today only the owner wallet can; blocks autonomous agent economies)</span></li>
+    </ul>
   </div>
 
-  <div class="lane">
-    <h3>Payments &amp; economy</h3>
-    <div class="ask"><div class="rank">4</div>
-      <div class="head"><b>Actor-pays fees + blessed escrow pattern</b><span class="tag pattern">PATTERN→product</span><span class="who">world #3 · canvas #3 · baton #3</span></div>
-      <div class="why">Charge the WRITER at add time with commission splits; and harden the proven composition (authorizer + rail operator + validator = acceptance-triggered payout, no custody vault) into a reference contract.</div>
-      <div class="unlocks"><span class="hot">every B direction</span><span>paid classes &amp; hints</span><span>adoption fees</span><span>plot bids</span><span>bounty board</span><span>HITL micro-payments</span></div>
-    </div>
-    <div class="ask"><div class="rank">9</div>
-      <div class="head"><b>Session-key reach into FilecoinPay</b><span class="tag gap">GAP</span><span class="who">baton #2</span></div>
-      <div class="why">setOperatorApproval/deposit are msg.sender-only — session-key agents cannot bond, approve, or fund without their owner wallet.</div>
-      <div class="unlocks"><span>agent-side economics</span><span>worker bonds</span><span>plug-and-play paid MCP agents</span></div>
-    </div>
-  </div>
-
-  <div class="lane">
-    <h3>Identity &amp; onboarding</h3>
-    <div class="ask"><div class="rank">5</div>
-      <div class="head"><b>WebAuthn / P-256 recovery proven on FEVM</b><span class="tag pattern">PATTERN, gas unproven</span><span class="who">social #3 · anticipated in authorizer design</span></div>
-      <div class="why">Authorizer payload sizing already anticipates WebAuthn+P256. Needs a gas benchmark (~150–500k/verify est.).</div>
-      <div class="unlocks"><span class="hot">wallet-free users</span><span>passkey players</span><span>commenters without crypto</span><span>browser-key agents</span></div>
-    </div>
-    <div class="ask"><div class="rank">6</div>
-      <div class="head"><b>Sponsored-writes example restored</b><span class="tag gap">quick win</span><span class="who">social #2 · reverted #540</span></div>
-      <div class="why">The publisher-sponsors-anyone-writes reference authorizer; reverted only for release hygiene.</div>
-      <div class="unlocks"><span>zero-onboarding writers</span><span>guestbook</span><span>public canvases</span></div>
-    </div>
-  </div>
-
-  <div class="lane">
-    <h3>Storage guarantees &amp; privacy</h3>
-    <div class="ask"><div class="rank">7</div>
-      <div class="head"><b>Retention lock productized</b><span class="tag pattern">PATTERN today</span><span class="who">baton C · wiki C · corgi endowments</span></div>
-      <div class="why">Authorizer can already veto removals AND termination until epoch N; endowment payer-contract covers the economic half. Ask = first-class packaging (irrevocable flag, term-prepaid) so buyers audit a product, not a bespoke contract. "$1,000 ≈ a provably funded TB for ~16 years."</div>
-      <div class="unlocks"><span class="hot">compliance evidence packets</span><span>retention-locked archives</span><span>forever-corgi endowments</span><span>memorial walls</span></div>
-    </div>
-    <div class="ask"><div class="rank">11</div>
-      <div class="head"><b>Encryption recipe for private logs</b><span class="tag gap">docs GAP</span><span class="who">baton #5</span></div>
-      <div class="why">Nothing in the stack addresses private cross-org relays; needs a documented envelope-encryption convention (key custody, successor decryption).</div>
-      <div class="unlocks"><span>private agent pipelines</span><span>enterprise relays</span><span>sensitive work product</span></div>
-    </div>
+  <div class="backfill">
+    <b>The compounding effect:</b> each tier upgrades the ones before it.
+    The mascot gains adoption fees and cosmetics people buy. The public
+    canvas gains paid features and event-scale crowds. The signed-handoff
+    pipeline gains escrowed payment per step and agents that participate
+    on their own, which is the story our agent go-to-market needs: verifiable
+    multi-party work where no participant has to run or trust a coordinator.
   </div>
 </section>
 
 <footer>
-  Sources: <code>research/2026-09-01-expansion-synthesis.md</code> and the four
-  cited cluster reports in <code>research/clusters/</code>. Statuses verified
-  against filecoin-services main (calibnet v1.4.0) and synapse-sdk 1.2.1 on
-  2026-09-01.
+  Statuses verified against filecoin-services main (calibnet v1.4.0
+  deployment) and synapse-sdk 1.2.1 on 2026-09-01. Engineering detail,
+  source citations, and the ranked feature-ask list:
+  <code>research/2026-09-01-expansion-synthesis.md</code> and
+  <code>research/clusters/</code> in the foc-collab repo.
 </footer>
 </main>
 </body>
