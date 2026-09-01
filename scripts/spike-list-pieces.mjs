@@ -8,6 +8,7 @@
  *   set -a; . ./config.env; . ./.env; set +a
  *   node scripts/spike-list-pieces.mjs <dataSetId>
  */
+import { calibration } from '@filoz/synapse-core/chains'
 import { Synapse } from '@filoz/synapse-sdk'
 import { custom, http } from 'viem'
 
@@ -18,10 +19,11 @@ if (!Number.isInteger(dataSetId) || !WALLET_ADDRESS) {
   process.exit(1)
 }
 
-const transport = http()
+const transport = http(calibration.rpcUrls.default.http[0])
 const synapse = Synapse.create({
   account: WALLET_ADDRESS,
-  transport: custom({ request: transport({ retryCount: 0 }).request }),
+  chain: calibration,
+  transport: custom({ request: transport({ chain: calibration, retryCount: 0 }).request }),
   source: 'foc-collab-spike',
 })
 const ctx = await synapse.storage.createContext({ dataSetId })

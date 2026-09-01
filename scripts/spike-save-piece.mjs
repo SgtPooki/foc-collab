@@ -11,6 +11,7 @@
  * `npx filecoin-pin session create`).
  */
 import { fromSecp256k1 } from '@filoz/synapse-core/session-key'
+import { calibration } from '@filoz/synapse-core/chains'
 import { Synapse } from '@filoz/synapse-sdk'
 import { custom, http } from 'viem'
 
@@ -23,13 +24,14 @@ if (!Number.isInteger(dataSetId) || !jsonArg || !WALLET_ADDRESS || !SESSION_KEY)
   process.exit(1)
 }
 
-const transport = http()
+const transport = http(calibration.rpcUrls.default.http[0])
 const sessionKey = fromSecp256k1({ privateKey: SESSION_KEY, root: WALLET_ADDRESS, transport })
 await sessionKey.syncExpirations()
 
 const synapse = Synapse.create({
   account: WALLET_ADDRESS,
-  transport: custom({ request: transport({ retryCount: 0 }).request }),
+  chain: calibration,
+  transport: custom({ request: transport({ chain: calibration, retryCount: 0 }).request }),
   sessionKey,
   source: 'foc-collab-spike',
 })

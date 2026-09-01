@@ -53,7 +53,16 @@ import { fold, lobby, seatOf, status } from './fold.js'
 import { loadIdentity, signPiece, verifyAll } from './identity.js'
 import { createTransport } from './transport.js'
 
-const transport = await createTransport()
+const labelEl = document.getElementById('transport-label')
+labelEl.textContent = 'connecting to shared storage…'
+let transport
+try {
+  transport = await createTransport()
+} catch (err) {
+  console.error(err)
+  labelEl.textContent = `could not connect (${err?.message?.slice(0, 120) ?? err}) — reload to retry`
+  throw err
+}
 
 // Seat identity is a keypair generated in this browser: the public key is
 // the token seats are assigned to, and every appended piece is signed, so
@@ -72,16 +81,21 @@ function tabScope() {
 }
 const identity = await loadIdentity(transport.perTab ? tabScope() : 'shared')
 const token = identity.token
-document.getElementById('transport-label').textContent = transport.label
+labelEl.textContent = transport.label
 
 const params = new URLSearchParams(location.search)
 const gameId = params.get('game')
 const $ = (id) => document.getElementById(id)
 
 let pieces = []
+let busy = null // label of the in-flight append, e.g. 'placing your X'
+let lastError = null
 
 function renderLobby() {
   $('lobby').hidden = false
+  const create = $('create')
+  create.disabled = busy != null
+  create.textContent = busy ?? 'create a game'
   const games = lobby(pieces)
   $('lobby-empty').hidden = games.length > 0
   $('games').replaceChildren(...games.map((g) => {
@@ -103,17 +117,32 @@ function renderGame() {
   const state = fold(gameId, pieces)
   const seat = seatOf(state, token)
   const joinable = seat == null && state.seats.X != null && state.seats.O == null
-  $('join').hidden = !joinable
+  const join = $('join')
+  join.hidden = !joinable
+  join.disabled = busy != null
   $('board').replaceChildren(...state.board.map((cell, i) => {
     const b = document.createElement('button')
     b.textContent = cell ?? ''
-    b.disabled = cell != null || state.winner != null || seat !== state.next || state.seats.O == null
-    b.onclick = () => append({ v: 1, type: 'move', game: gameId, seq: state.seq, cell: i })
+    b.disabled = busy != null || cell != null || state.winner != null
+      || seat !== state.next || state.seats.O == null
+    b.onclick = () => append(
+      { v: 1, type: 'move', game: gameId, seq: state.seq, cell: i },
+      `placing your ${seat}`,
+    )
     return b
   }))
-  $('status').textContent = status(state)
-    + (seat ? ` — you are ${seat}` : joinable ? ' — join to play' : ' — spectating')
+  const yourTurn = seat != null && seat === state.next && state.winner == null && state.seats.O != null
+  document.title = yourTurn && busy == null ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
+  $('status').textContent = statusLine(state, seat, joinable)
   $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
+}
+
+function statusLine(state, seat, joinable) {
+  if (busy != null) return `${busy}… saving to shared storage takes up to a minute — one click is enough`
+  if (lastError != null) return lastError
+  if (seat != null) return `${status(state)} — you are ${seat}`
+  if (joinable) return `${status(state)} — join to play`
+  return `${status(state)} — spectating`
 }
 
 const render = () => (gameId == null ? renderLobby() : renderGame())
@@ -124,19 +153,34 @@ async function refresh() {
   render()
 }
 
-async function append(payload) {
-  await transport.append(await signPiece(payload, identity))
-  await refresh()
+async function append(payload, label) {
+  if (busy != null) return false // one in-flight append at a time
+  busy = label
+  lastError = null
+  render()
+  try {
+    await transport.append(await signPiece(payload, identity))
+    busy = null
+    await refresh()
+    return true
+  } catch (err) {
+    console.error(err)
+    busy = null
+    lastError = `could not save (${err?.message?.slice(0, 120) ?? err}) — try again`
+    render()
+    return false
+  }
 }
 
 $('create').onclick = async () => {
   const name = prompt('Name the game (optional):')?.trim() || undefined
   const game = `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-  await append({ v: 1, type: 'create', game, name })
-  location.search = `?game=${encodeURIComponent(game)}`
+  if (await append({ v: 1, type: 'create', game, name }, 'creating game')) {
+    location.search = `?game=${encodeURIComponent(game)}`
+  }
 }
 
-$('join').onclick = () => append({ v: 1, type: 'join', game: gameId })
+$('join').onclick = () => append({ v: 1, type: 'join', game: gameId }, 'joining as O')
 
 $('share').onclick = async () => {
   await navigator.clipboard.writeText(location.href)
@@ -144,9 +188,12 @@ $('share').onclick = async () => {
   setTimeout(() => { $('share').textContent = 'copy invite link' }, 1500)
 }
 
-transport.onChange?.(refresh)
+const quietRefresh = () => { if (busy == null) refresh() }
+transport.onChange?.(quietRefresh)
+labelEl.textContent = `${transport.label} — loading pieces…`
 await refresh()
-if (transport.pollMs) setInterval(refresh, transport.pollMs)
+labelEl.textContent = transport.label
+if (transport.pollMs) setInterval(quietRefresh, transport.pollMs)
 </script>
 </body>
 </html>
