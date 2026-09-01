@@ -33,6 +33,7 @@ function localTransport() {
   const channel = new BroadcastChannel('ttt-pieces')
   return {
     label: 'local (two tabs, same browser)',
+    logId: 'local', // stamped into signed pieces for domain separation
     perTab: true, // player tokens per tab, so one browser can hold both seats
     async append(piece) {
       const log = JSON.parse(localStorage.getItem(KEY) ?? '[]')

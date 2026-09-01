@@ -13,7 +13,7 @@
  *
  * Usage:
  *   set -a; . ./config.env; . ./.env; set +a
- *   node scripts/setup-game-log.mjs [validity-days]   (default 14)
+ *   node scripts/setup-game-log.mjs [validity-days]   (default 2)
  */
 import { calibration } from '@filoz/synapse-core/chains'
 import { AddPiecesPermission, loginSync } from '@filoz/synapse-core/session-key'
@@ -22,7 +22,7 @@ import { createWalletClient, custom, http, publicActions } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
 const MIN_PIECE_BYTES = 127
-const validityDays = Number(process.argv[2] ?? 14)
+const validityDays = Number(process.argv[2] ?? 2)
 const { PRIVATE_KEY } = process.env
 if (!PRIVATE_KEY || !Number.isFinite(validityDays) || validityDays <= 0) {
   console.error('usage: PRIVATE_KEY=0x.. node scripts/setup-game-log.mjs [validity-days]')

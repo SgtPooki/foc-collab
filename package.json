@@ -4,11 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test games/tic-tac-toe/*.test.js"
+    "test": "node --test games/tic-tac-toe/*.test.js",
+    "test:e2e": "node e2e/two-player.e2e.mjs"
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.8.1",
     "@filoz/synapse-sdk": "^1.2.1",
     "viem": "^2.56.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1"
   }
 }

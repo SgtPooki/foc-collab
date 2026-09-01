@@ -61,6 +61,7 @@ export function status(state) {
 /** Applies one piece to one game's state; unrelated or illegal pieces are counted and skipped. */
 export function apply(state, piece) {
   if (piece == null || typeof piece !== 'object' || piece.game !== state.game) return state
+  if (piece.v !== 1) return { ...state, ignored: state.ignored + 1 }
   const ignore = () => ({ ...state, ignored: state.ignored + 1 })
 
   if (piece.type === 'create') {
@@ -110,9 +111,13 @@ export function lobby(pieces) {
   const games = new Map()
   for (const piece of pieces) {
     if (piece == null || typeof piece !== 'object' || typeof piece.game !== 'string') continue
-    if (!games.has(piece.game)) games.set(piece.game, initialState(piece.game))
+    // Only a create piece allocates lobby state; junk aimed at ghost game
+    // ids is dropped without allocating anything.
+    if (!games.has(piece.game)) {
+      if (piece.type !== 'create') continue
+      games.set(piece.game, initialState(piece.game))
+    }
     games.set(piece.game, apply(games.get(piece.game), piece))
   }
-  // A game only exists once its create piece applied.
   return [...games.values()].filter((s) => s.seats.X != null)
 }

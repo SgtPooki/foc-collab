@@ -31,6 +31,7 @@
   #games li.your-turn a::before { content: '● '; color: var(--accent); }
   #status { min-height: 1.5em; }
   .row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.8rem 0; flex-wrap: wrap; }
+  #banner { background: #e5534b22; border: 1px solid #e5534b66; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -40,8 +41,10 @@
   <p class="meta">Every game and every move is an appended JSON piece in one shared
   log. Lobby and boards are a deterministic fold over that log: illegal,
   out-of-turn, and impostor pieces are ignored by every client computing the
-  same fold. Nothing is ever mutated.</p>
+  same fold. Nothing is ever mutated. Moves land on-chain in ~30s — yours
+  shows instantly, your opponent's arrives with the next epoch.</p>
   <p class="meta" id="transport-label"></p>
+  <p id="banner" hidden></p>
 
   <section id="lobby" hidden>
     <div class="row"><button id="create">create a game</button></div>
@@ -57,6 +60,8 @@
       <a href="?">← lobby</a>
       <button id="share">copy invite link</button>
       <button id="join" hidden>join as O</button>
+      <button id="rematch" hidden>rematch</button>
+      <button id="notify" hidden>🔔 notify me on my turn</button>
     </div>
     <div id="board"></div>
     <p id="status"></p>
@@ -68,6 +73,8 @@
 import { fold, lobby, seatOf, status } from './fold.js'
 import { loadIdentity, signPiece, verifyAll } from './identity.js'
 import { createTransport } from './transport.js'
+
+const APP = 'foc-ttt' // domain-separation tag, signed into every piece
 
 const labelEl = document.getElementById('transport-label')
 labelEl.textContent = 'connecting to shared storage…'
@@ -105,11 +112,23 @@ const $ = (id) => document.getElementById(id)
 
 let pieces = []
 let busy = null // label of the in-flight append, e.g. 'placing your X'
-let busyStage = null // transport progress: uploading / stored / confirming
+let busyStage = null // transport progress: uploading / stored / submitted
 let pendingMove = null // { cell, seat, sentAt } shown optimistically until the log confirms it
 const PENDING_TIMEOUT_MS = 3 * 60000 // give up on a submitted move after 3 minutes
 let lastError = null
 let prevBoard = null // to highlight the opponent's latest move
+let lastNotifiedSeq = -1
+
+if (transport.writeExpiry) {
+  const banner = $('banner')
+  if (transport.writeExpiry < Date.now()) {
+    banner.textContent = 'the demo write key has expired — games are read-only until the publisher re-arms it'
+    banner.hidden = false
+  } else if (transport.writeExpiry < Date.now() + 3 * 3600000) {
+    banner.textContent = `heads up: the demo write key expires ${new Date(transport.writeExpiry).toLocaleString()}`
+    banner.hidden = false
+  }
+}
 
 function renderLobby() {
   $('lobby').hidden = false
@@ -123,15 +142,15 @@ function renderLobby() {
   const rest = games.filter((g) => seatOf(g, token) == null && g.seats.O != null)
   $('games').replaceChildren(
     ...lobbySection('your games', mine),
-    ...lobbySection('open to join', open),
-    ...lobbySection('other games', rest),
+    ...lobbySection('open to join', open.slice(0, 15), open.length),
+    ...lobbySection('other games', rest.slice(0, 15), rest.length),
   )
 }
 
-function lobbySection(title, games) {
+function lobbySection(title, games, total = games.length) {
   if (games.length === 0) return []
   const h = document.createElement('h2')
-  h.textContent = title
+  h.textContent = total > games.length ? `${title} (${games.length} of ${total})` : title
   const ul = document.createElement('ul')
   ul.append(...games.map(lobbyRow))
   return [h, ul]
@@ -161,6 +180,9 @@ function renderGame() {
   const join = $('join')
   join.hidden = !joinable
   join.disabled = busy != null
+  $('rematch').hidden = !(state.winner != null && seat != null && busy == null)
+  $('notify').hidden = !('Notification' in window) || Notification.permission !== 'default'
+    || seat == null || state.winner != null
   $('board').replaceChildren(...state.board.map((cell, i) => {
     const b = document.createElement('button')
     b.textContent = cell ?? ''
@@ -183,6 +205,11 @@ function renderGame() {
   const yourTurn = seat != null && seat === state.next && state.winner == null
     && state.seats.O != null && busy == null && pendingMove == null
   document.title = yourTurn ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
+  if (yourTurn && state.seq !== lastNotifiedSeq && document.hidden
+    && 'Notification' in window && Notification.permission === 'granted') {
+    lastNotifiedSeq = state.seq
+    new Notification('your move — tic-tac-toe', { body: status(state) })
+  }
   const statusEl = $('status')
   statusEl.textContent = statusLine(state, seat, joinable)
   statusEl.classList.toggle('error', busy == null && lastError != null)
@@ -196,7 +223,11 @@ function renderGame() {
 function statusLine(state, seat, joinable) {
   if (busy != null && busyStage != null) return `${busy} — ${busyStage}`
   if (busy != null) return `${busy}`
-  if (pendingMove != null) return 'move sent — finalizing on-chain, your opponent will see it shortly'
+  if (pendingMove != null) {
+    const eta = Math.max(0, 60 - Math.round((Date.now() - pendingMove.sentAt) / 1000))
+    if (eta > 0) return `move sent — your opponent sees it in ~${eta}s`
+    return 'move sent — finalizing on-chain'
+  }
   if (lastError != null) return lastError
   if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
     return `${status(state)} — you are ${seat}, waiting for your opponent`
@@ -208,23 +239,46 @@ function statusLine(state, seat, joinable) {
 
 const render = () => (gameId == null ? renderLobby() : renderGame())
 
+// Pieces are immutable and object references are stable across polls
+// (transport caches by CID), so verification memoizes per object.
+const verdicts = new WeakMap()
+async function verifiedPieces(raw) {
+  const unseen = raw.filter((p) => p != null && typeof p === 'object' && !verdicts.has(p))
+  const results = await verifyAll(unseen)
+  unseen.forEach((p, i) => verdicts.set(p, results[i]))
+  return raw.map((p) => {
+    if (p == null || typeof p !== 'object') return null
+    const ok = verdicts.get(p)
+    if (ok == null) return null
+    // Domain separation: only pieces signed for this app and this log count.
+    return ok.app === APP && ok.log === transport.logId ? ok : null
+  })
+}
+
 async function refresh() {
-  // Forged or tampered pieces become nulls, which the fold ignores.
-  const next = await verifyAll(await transport.list())
-  if (gameId != null) {
-    const oldBoard = fold(gameId, pieces).board
-    const newBoard = fold(gameId, next).board
-    if (oldBoard.some((cell, i) => cell !== newBoard[i])) prevBoard = oldBoard
-    if (pendingMove != null && newBoard[pendingMove.cell] != null) {
-      pendingMove = null // the log has caught up with the optimistic mark
-    } else if (pendingMove != null && Date.now() - pendingMove.sentAt > PENDING_TIMEOUT_MS) {
+  pieces = await verifiedPieces(await transport.list())
+  if (gameId != null && pendingMove != null) {
+    const board = fold(gameId, pieces).board
+    const landed = board[pendingMove.cell]
+    if (landed === pendingMove.seat) {
+      pendingMove = null
+    } else if (landed != null) {
+      pendingMove = null
+      lastError = 'your move lost a race with another piece — the board has been updated, pick again'
+    } else if (Date.now() - pendingMove.sentAt > PENDING_TIMEOUT_MS) {
       pendingMove = null
       lastError = 'your move has not appeared in the log — the board is unlocked, check it and retry'
     }
   }
-  pieces = next
+  if (gameId != null) {
+    const oldBoard = prevSnapshot
+    const newBoard = fold(gameId, pieces).board
+    if (oldBoard != null && oldBoard.some((cell, i) => cell !== newBoard[i])) prevBoard = oldBoard
+    prevSnapshot = newBoard
+  }
   render()
 }
+let prevSnapshot = null
 
 async function append(payload, label, move = null) {
   if (busy != null) return false // one in-flight append at a time
@@ -234,7 +288,7 @@ async function append(payload, label, move = null) {
   lastError = null
   render()
   try {
-    const signed = await signPiece(payload, identity)
+    const signed = await signPiece({ ...payload, app: APP, log: transport.logId }, identity)
     await transport.append(signed, (stage) => {
       busyStage = stage
       render()
@@ -255,15 +309,25 @@ async function append(payload, label, move = null) {
   }
 }
 
-$('create').onclick = async () => {
+function newGame(name) {
+  const game = `game-${crypto.randomUUID()}`
+  return append({ v: 1, type: 'create', game, name }, 'creating game')
+    .then((ok) => { if (ok) location.search = `?game=${encodeURIComponent(game)}` })
+}
+
+$('create').onclick = () => {
   const name = prompt('Name the game (optional):')?.trim() || undefined
-  const game = `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-  if (await append({ v: 1, type: 'create', game, name }, 'creating game')) {
-    location.search = `?game=${encodeURIComponent(game)}`
-  }
+  newGame(name)
 }
 
 $('join').onclick = () => append({ v: 1, type: 'join', game: gameId }, 'joining as O')
+
+$('rematch').onclick = () => newGame('rematch')
+
+$('notify').onclick = async () => {
+  await Notification.requestPermission()
+  render()
+}
 
 $('share').onclick = async () => {
   await navigator.clipboard.writeText(location.href)
@@ -271,12 +335,24 @@ $('share').onclick = async () => {
   setTimeout(() => { $('share').textContent = 'copy invite link' }, 1500)
 }
 
-const quietRefresh = () => { if (busy == null) refresh() }
-transport.onChange?.(quietRefresh)
+// Adaptive polling: quick while a game is live on screen, relaxed in the
+// lobby or on finished games. The countdown re-renders once a second.
+function pollDelay() {
+  if (gameId == null) return 12000
+  const state = fold(gameId, pieces)
+  if (state.winner != null) return 20000
+  return 4000
+}
+async function pollLoop() {
+  if (busy == null) await refresh().catch(console.error)
+  setTimeout(pollLoop, transport.pollMs != null ? pollDelay() : 60000)
+}
+transport.onChange?.(() => { if (busy == null) refresh() })
 labelEl.textContent = `${transport.label} — loading pieces…`
 await refresh()
 labelEl.textContent = transport.label
-if (transport.pollMs) setInterval(quietRefresh, transport.pollMs)
+if (transport.pollMs != null) setTimeout(pollLoop, pollDelay())
+setInterval(() => { if (pendingMove != null && busy == null) render() }, 1000)
 </script>
 </body>
 </html>

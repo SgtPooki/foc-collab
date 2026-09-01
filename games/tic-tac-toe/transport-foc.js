@@ -9,10 +9,12 @@
  * { dataset, wallet, sessionKey? }. When no sessionKey is embedded, the
  * player pastes one once; it stays in localStorage, never in a URL.
  */
-import { Synapse } from 'https://esm.sh/@filoz/synapse-sdk@1.2.1'
-import { calibration } from 'https://esm.sh/@filoz/synapse-core@0.8.1/chains'
-import { AddPiecesPermission, fromSecp256k1, getExpirations } from 'https://esm.sh/@filoz/synapse-core@0.8.1/session-key'
-import { createPublicClient, custom, http } from 'https://esm.sh/viem@2.56.1'
+// Bundled locally by scripts/build-page.mjs — the published page carries
+// its dependencies instead of trusting a CDN at runtime.
+import {
+  AddPiecesPermission, calibration, createPublicClient, custom,
+  fromSecp256k1, getExpirations, http, Synapse,
+} from './vendor-foc.js'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 
@@ -77,10 +79,32 @@ export async function createFocTransport(config) {
   })
   const ctx = await synapse.storage.createContext({ dataSetId })
 
-  const bodyCache = new Map() // pieceCid -> parsed piece (immutable)
+  // pieceCid -> parsed piece. Pieces are immutable, so cache entries never
+  // expire; persisting them means a reload only downloads NEW pieces.
+  const bodyCache = new Map()
+  const CACHE_KEY = `ttt:piece-cache:${dataSetId}`
+  try {
+    for (const [cid, body] of JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]')) {
+      bodyCache.set(cid, body)
+    }
+  } catch { /* corrupt cache: start cold */ }
+  let persistQueued = false
+  function persistCache() {
+    if (persistQueued) return
+    persistQueued = true
+    setTimeout(() => {
+      persistQueued = false
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify([...bodyCache]))
+      } catch { /* storage full or blocked: cache stays in-memory */ }
+    }, 250)
+  }
 
+  const writeExpiry = Number(expirations[AddPiecesPermission] ?? 0n) * 1000
   return {
     label: `shared data set #${dataSetId}`,
+    logId: `foc:${dataSetId}`, // stamped into signed pieces for domain separation
+    writeExpiry, // ms epoch when the embedded write key dies; 0 if unknown
     pollMs: 8000,
     async append(piece, onProgress) {
       onProgress?.('uploading')
@@ -103,20 +127,47 @@ export async function createFocTransport(config) {
         entries.push(piece)
       }
       entries.sort((a, b) => (a.pieceId < b.pieceId ? -1 : 1))
-      const pieces = []
-      for (const { pieceCid } of entries) {
-        const key = String(pieceCid)
-        if (!bodyCache.has(key)) {
+      const missing = entries.filter(({ pieceCid }) => !bodyCache.has(String(pieceCid)))
+      // Fetch uncached bodies concurrently (small JSON pieces, capped batch).
+      const BATCH = 8
+      for (let i = 0; i < missing.length; i += BATCH) {
+        await Promise.all(missing.slice(i, i + BATCH).map(async ({ pieceCid }) => {
           try {
-            const bytes = await ctx.download({ pieceCid })
-            bodyCache.set(key, JSON.parse(new TextDecoder().decode(bytes)))
+            // Junk-piece guard: a game piece is ~200 bytes. Fetch by URL and
+            // refuse oversized bodies BEFORE buffering them, so a griefer's
+            // gigabyte piece cannot OOM every client. Signature verification
+            // downstream covers integrity, which ctx.download would have.
+            const res = await fetch(ctx.getPieceUrl(pieceCid))
+            if (!res.ok) throw new Error(`fetch ${res.status}`)
+            const length = Number(res.headers.get('content-length') ?? 0)
+            if (length > 8192) throw new Error('oversized piece')
+            const reader = res.body.getReader()
+            const chunks = []
+            let total = 0
+            for (;;) {
+              const { done, value } = await reader.read()
+              if (done) break
+              total += value.length
+              if (total > 8192) {
+                await reader.cancel()
+                throw new Error('oversized piece')
+              }
+              chunks.push(value)
+            }
+            const bytes = new Uint8Array(total)
+            let offset = 0
+            for (const c of chunks) {
+              bytes.set(c, offset)
+              offset += c.length
+            }
+            bodyCache.set(String(pieceCid), JSON.parse(new TextDecoder().decode(bytes)))
           } catch {
-            bodyCache.set(key, null) // non-JSON piece: fold ignores it
+            bodyCache.set(String(pieceCid), null) // junk piece: fold ignores it
           }
-        }
-        pieces.push(bodyCache.get(key))
+        }))
       }
-      return pieces
+      if (missing.length > 0) persistCache()
+      return entries.map(({ pieceCid }) => bodyCache.get(String(pieceCid)))
     },
   }
 }

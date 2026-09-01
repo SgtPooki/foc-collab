@@ -58,9 +58,11 @@ a game-1 player. Instead each browser generates an ECDSA P-256 keypair
 assigned to, every piece is signed over a canonical serialization that
 includes the game id, and every client verifies signatures between
 fetching and folding. The private key is generated non-extractable and
-persisted in IndexedDB as a CryptoKey (structured clone), so its material
-never exists as text and cannot be exfiltrated even by injected script —
-it can only be used to sign, in that browser. Forged, tampered, and cross-game-replayed pieces
+persisted in IndexedDB as a CryptoKey (structured clone), so the key BYTES
+never exist as text and cannot be exfiltrated. Script that compromises the
+page can still ask the key to sign while the page is open — non-
+extractability prevents stealing the identity for later use elsewhere, not
+in-page abuse. Forged, tampered, and cross-game-replayed pieces
 fail verification identically everywhere (tested in `identity.test.js`,
 including an end-to-end takeover attempt). Note this is game-level
 integrity only: the shared session key still gates who can *write* to the
