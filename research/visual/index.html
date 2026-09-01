@@ -127,7 +127,7 @@
 
 <section class="tier now">
   <span class="band">TIER 1 · BUILDABLE TODAY</span>
-  <h2>Serverless apps for participants we onboard</h2>
+  <h2>Serverless apps for invited participants</h2>
   <p class="lede">The per-data-set access rules shipped in August (live on the
   calibration network; mainnet release in progress this week) let a contract
   govern who writes what into a data set. That is enough for real multi-user
@@ -149,8 +149,7 @@
     <li><span class="st live">LIVE</span><b>Turn-based games, Words-with-Friends style</b>
       <small>Running now on calibration: a two-player game where every move is
       a signed record, both browsers compute the same board, and there is no
-      game server. The 30-to-60-second move latency suits turn-based play.
-      Ask us for the link.</small></li>
+      game server. The 30-to-60-second move latency suits turn-based play.</small></li>
     <li><span class="st concept">CONCEPT</span><b>A community Tamagotchi that eats money</b>
       <small>A virtual pet whose health bar is the real funding balance of its
       own storage. Feeding it is a payment; every feeding is publicly
@@ -174,10 +173,9 @@
   <span class="band">TIER 2 · ONE ROUND OF TOOLING AWAY</span>
   <h2>Open participation: strangers join from a link</h2>
   <p class="lede">The contracts already allow public, rule-governed writing,
-  and our team can hand-build any one of these applications today by calling
-  the contracts directly; that build is the next item on our engineering
-  plan. What the tooling below changes is who else can build them: without
-  SDK support every such app is a bespoke effort by us, records cannot be
+  and any one of these applications can be hand-built today by calling the
+  contracts directly. What the tooling below changes is who can build them:
+  without SDK support each app is a bespoke integration, records cannot be
   searched or filtered without downloading everything, and the reference
   contract for sponsored public writing (reverted for release timing) needs
   restoring. Tooling work, not protocol work.</p>
@@ -203,8 +201,7 @@
       partner lined up yet; the mechanics are verified.</small></li>
     <li><span class="st concept">CONCEPT</span><b>Comments on any static page, Disqus without the server</b>
       <small>Viewers of a published page leave notes that persist and
-      overlay on the page. This is the use case the whole line of work
-      started from.</small></li>
+      overlay on the page, with no comment server anywhere.</small></li>
     <li><span class="st concept">CONCEPT</span><b>Community playlists and queues</b>
       <small>Anyone can add to a shared queue; the contract enforces what
       kinds of entries are allowed and how often each person can add.</small></li>
@@ -213,7 +210,7 @@
   <div class="needs">
     <b>What makes this a platform capability, not a bespoke build</b>
     <ul>
-      <li>SDK support for the access-rule contracts <span class="who">(synapse-sdk; we can call them raw today, outside developers realistically cannot)</span></li>
+      <li>SDK support for the access-rule contracts <span class="who">(synapse-sdk; callable raw today, but not realistically by outside developers)</span></li>
       <li>Indexed reads: list and filter records by label without downloading everything <span class="who">(SDK surface over events indexers already capture)</span></li>
       <li>Restore the sponsored-public-writing reference contract <span class="who">(filecoin-services; merged in August, reverted for release timing)</span></li>
     </ul>
@@ -227,9 +224,8 @@
   applications into products. Each also upgrades every example above:
   the Tamagotchi gains paid adoptions and cosmetics, the public canvas
   gains paid features and event-scale crowds, and the hand-off chain gains
-  escrowed payment per step and AI agents that participate on their own.
-  That last combination, verifiable multi-party work with no coordinator
-  to run or trust, is the shape our agent go-to-market is built around.</p>
+  escrowed payment per step and AI agents that participate on their own:
+  verifiable multi-party work with no coordinator to run or trust.</p>
 
   <h3 class="label">Capabilities this adds</h3>
   <div class="caps">
