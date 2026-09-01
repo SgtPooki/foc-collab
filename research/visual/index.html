@@ -36,11 +36,19 @@
     font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
   header h1 { font-size: 1.7rem; margin: 0 0 0.3rem; letter-spacing: -0.01em; }
-  header p { color: var(--muted); margin: 0; max-width: 68ch; }
+  header p { color: var(--muted); margin: 0 0 0.5rem; max-width: 70ch; }
+  header p.what { color: var(--ink); }
   .stamp { font: 600 0.72rem/1 ui-monospace, Menlo, monospace; color: var(--muted);
     text-transform: uppercase; letter-spacing: 0.09em; }
 
-  .tier { margin-top: 2.4rem; background: var(--panel); border: 1px solid var(--line);
+  .econ { margin-top: 1.2rem; display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.5rem; }
+  .econ div { background: var(--panel); border: 1px solid var(--line);
+    border-radius: 9px; padding: 0.55rem 0.75rem; }
+  .econ b { display: block; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .econ small { color: var(--muted); }
+
+  .tier { margin-top: 2.2rem; background: var(--panel); border: 1px solid var(--line);
     border-radius: 14px; padding: 1.4rem 1.5rem 1.5rem; border-top: 4px solid var(--line); }
   .tier.now { border-top-color: var(--now); }
   .tier.next { border-top-color: var(--next); }
@@ -51,7 +59,7 @@
   .tier.next .band { color: var(--next); background: var(--next-bg); }
   .tier.later .band { color: var(--later); background: var(--later-bg); }
   .tier h2 { font-size: 1.2rem; margin: 0.5rem 0 0.3rem; }
-  .tier > p.lede { color: var(--muted); margin: 0 0 1.1rem; max-width: 72ch; }
+  .tier > p.lede { color: var(--muted); margin: 0 0 1.1rem; max-width: 74ch; }
 
   h3.label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em;
     color: var(--muted); margin: 1.2rem 0 0.5rem; }
@@ -65,8 +73,13 @@
   ul.examples { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
   ul.examples li { padding: 0.65rem 0.85rem; border: 1px solid var(--line);
     border-radius: 9px; font-size: 0.9rem; }
-  ul.examples li b { display: block; font-size: 0.92rem; }
+  ul.examples li b { font-size: 0.92rem; }
   ul.examples li small { color: var(--muted); display: block; margin-top: 0.15rem; }
+  .st { float: right; margin-left: 0.6rem; border-radius: 999px; padding: 0.1rem 0.5rem;
+    font: 700 0.66rem/1.6 ui-monospace, Menlo, monospace; letter-spacing: 0.05em; }
+  .st.live { color: var(--now); background: var(--now-bg); }
+  .st.proto { color: var(--next); background: var(--next-bg); }
+  .st.concept { color: var(--muted); background: var(--chip-bg); }
 
   .needs { margin-top: 1.2rem; padding: 0.8rem 1rem; border-radius: 9px;
     background: var(--chip-bg); font-size: 0.85rem; }
@@ -75,10 +88,16 @@
   .needs li { margin: 0.15rem 0; }
   .needs .who { color: var(--muted); }
 
-  .backfill { margin-top: 1.2rem; border-left: 3px solid var(--later);
-    padding: 0.2rem 0 0.2rem 0.9rem; font-size: 0.9rem; max-width: 74ch; }
+  .closing { margin-top: 2.2rem; display: grid; gap: 0.6rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .closing div { background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1rem 1.1rem; font-size: 0.88rem; }
+  .closing h3 { margin: 0 0 0.4rem; font-size: 0.95rem; }
+  .closing ol { margin: 0; padding-left: 1.2rem; }
+  .closing li { margin: 0.25rem 0; }
+  .closing p { margin: 0; color: var(--muted); }
 
-  footer { margin-top: 3rem; color: var(--muted); font-size: 0.78rem; max-width: 74ch; }
+  footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.78rem; max-width: 76ch; }
   footer code { font-family: ui-monospace, Menlo, monospace; }
 </style>
 </head>
@@ -87,158 +106,189 @@
 <header>
   <p class="stamp">filecoin onchain cloud · capability review · 2026-09-01</p>
   <h1>FOC Capability Ladder</h1>
-  <p>What kinds of applications the platform can power today, what one round of
-  tooling work adds, and what the platform features after that make possible.
-  Every claim below was verified against the shipped contracts and SDK; the
-  engineering detail lives in <code>research/</code> in this repo.</p>
+  <p class="what">Filecoin Onchain Cloud (FOC) is paid, provable storage with
+  programmable rules: contracts decide who may write to a data set, and
+  payments for storage happen on-chain where anyone can verify them.</p>
+  <p>This page answers one question: what categories of application can FOC
+  power as the only backend (no app server, no database), and which specific
+  platform investments open the next category. It exists to inform which of
+  those investments we prioritize. Examples are labeled
+  <span class="st live">LIVE</span> (running on the calibration test network
+  today), <span class="st proto">PROTOTYPED</span> (mechanics proven, product
+  not built), or <span class="st concept">CONCEPT</span> (design on paper,
+  mechanics verified against shipped contracts).</p>
+  <div class="econ">
+    <div><b>~$0.005 / GB-month</b><small>storage price, current calibration price list</small></div>
+    <div><b>~$0.01 / write</b><small>per contribution when each is its own transaction; batching design would cut it to ~$0.003</small></div>
+    <div><b>30 to 60 s</b><small>until a write is visible to other readers (one chain epoch plus confirmation)</small></div>
+    <div><b>App account pays</b><small>storage, writes, and CDN reads all bill the application's own funding account</small></div>
+  </div>
 </header>
 
 <section class="tier now">
   <span class="band">TIER 1 · BUILDABLE TODAY</span>
-  <h2>Shared applications with no servers at all</h2>
-  <p class="lede">FOC storage plus the new per-data-set access rules
-  (shipped to calibration, mainnet release in progress) already support
-  applications where the storage network is the entire backend: no app
-  server, no database, no host to keep running.</p>
+  <h2>Serverless apps for participants we onboard</h2>
+  <p class="lede">The per-data-set access rules shipped in August (live on the
+  calibration network; mainnet release in progress this week) let a contract
+  govern who writes what into a data set. That is enough for real multi-user
+  applications, with one honest limit: participants have to be set up by the
+  operator today, because the SDK has no self-serve onboarding path yet.
+  Tier 2 removes that limit.</p>
 
-  <h3 class="label">Functionality available now</h3>
+  <h3 class="label">Capabilities available now</h3>
   <div class="caps">
-    <span>Shared state any browser can read and replay identically</span>
-    <span>Anyone can fund a thing's storage, with attributed on-chain receipts</span>
-    <span>Write rules enforced by contract (allowlists, rate limits, roles)</span>
+    <span>Shared state every browser replays identically</span>
+    <span>Anyone can fund an app's storage account, with attributed receipts</span>
+    <span>Write rules enforced by contract, not by a moderator</span>
     <span>Deletion and shutdown vetoed until a chosen date</span>
-    <span>CDN-speed public reads</span>
+    <span>Public reads over a CDN</span>
   </div>
 
   <h3 class="label">Examples</h3>
   <ul class="examples">
-    <li><b>A shared thing that lives only while people pay to keep it alive</b>
-      <small>Its health bar is its real storage funding; every feeding is a
-      payment anyone can verify. This is the mascot idea from standup: if the
-      community stops funding it, it visibly declines, and the protocol gives
-      a roughly 30-day window before the data is at risk.</small></li>
-    <li><b>Turn-based multiplayer between any browsers on Earth</b>
-      <small>Already live: we have a working two-player game on calibration
-      where every move is a signed record and both players' browsers compute
-      the same board. Moves take 30 to 60 seconds to land, which suits
-      turn-based play.</small></li>
-    <li><b>Multi-step handoffs with signed receipts at every step</b>
+    <li><span class="st live">LIVE</span><b>Turn-based games, Words-with-Friends style</b>
+      <small>Running now on calibration: a two-player game where every move is
+      a signed record, both browsers compute the same board, and there is no
+      game server. The 30-to-60-second move latency suits turn-based play.
+      Ask us for the link.</small></li>
+    <li><span class="st concept">CONCEPT</span><b>A community Tamagotchi that eats money</b>
+      <small>A virtual pet whose health bar is the real funding balance of its
+      own storage. Feeding it is a payment; every feeding is publicly
+      attributed; if funding runs out, the protocol gives about 30 days
+      before storage providers stop being paid and may delete it. All the
+      mechanics exist on-chain today; this needs only a web page.</small></li>
+    <li><span class="st proto">PROTOTYPED</span><b>Hand-off chains with signed receipts, DocuSign-style</b>
       <small>Work passes between people or AI agents; each step is signed,
-      ordered, and independently verifiable. Today this works among
-      participants we set up ourselves.</small></li>
-    <li><b>Records locked against deletion until a chosen year</b>
+      ordered, and verifiable by an outside party. The record mechanics are
+      the same ones the live game uses; today the participants must be
+      pre-arranged.</small></li>
+    <li><span class="st proto">PROTOTYPED</span><b>Write-once records, like S3 Object Lock</b>
       <small>An access-rule contract can refuse both deletion and shutdown
-      until a set date. At current pricing, about $1,000 keeps a terabyte
-      provably funded for roughly 16 years, and anyone can check the balance.</small></li>
+      until a set date. At the current price list, $1,000 funds a terabyte
+      for roughly 16 years, and the balance is publicly checkable.
+      Assumes today's pricing; storage prices move.</small></li>
   </ul>
 </section>
 
 <section class="tier next">
   <span class="band">TIER 2 · ONE ROUND OF TOOLING AWAY</span>
   <h2>Open participation: strangers join from a link</h2>
-  <p class="lede">The contracts already permit public, rule-governed writing.
-  What is missing is tooling: the SDK has no ergonomic path to the new access
-  rules, and there is no way to search or filter stored records without
-  downloading everything. Close those two gaps and applications stop being
-  invite-only.</p>
+  <p class="lede">The contracts already allow public, rule-governed writing.
+  Three tooling gaps keep it invite-only: the SDK has no path to the new
+  access rules, records cannot be searched or filtered without downloading
+  everything, and the reference contract for sponsored public writing was
+  reverted for release timing and needs restoring. This is SDK work, not
+  protocol work.</p>
 
-  <h3 class="label">Functionality this adds</h3>
+  <h3 class="label">Capabilities this adds</h3>
   <div class="caps">
-    <span>Anyone with the link can contribute, under contract-enforced rules</span>
-    <span>Content that is searchable and filterable at consumer scale</span>
+    <span>Anyone with the link contributes, under contract-enforced limits</span>
+    <span>Search and filter at consumer scale</span>
     <span>Live activity feeds instead of polling</span>
     <span>Embeddable views for any website</span>
   </div>
 
-  <h3 class="label">What that looks like</h3>
+  <h3 class="label">What that opens</h3>
   <ul class="examples">
-    <li><b>Public collaborative artifacts</b>
-      <small>A shared canvas, board, or timeline the whole internet can write
-      to, one contribution per person per time window, with the rule enforced
-      by contract rather than by a moderator watching.</small></li>
-    <li><b>Event experiences gated by attendance</b>
-      <small>Check in at a conference and your badge lets you contribute to a
-      collective artifact that is stored permanently afterward. Part of the
-      ticket price can fund that storage for decades.</small></li>
-    <li><b>Comments and guest notes on any published page</b>
-      <small>The original idea this work started from: viewers of a static
-      page leave notes that persist, with no comment server anywhere.</small></li>
-    <li><b>Community-curated media queues</b>
-      <small>Shared playlists and reading lists anyone can add to, with the
-      catalog of allowed entries enforced by contract.</small></li>
+    <li><span class="st concept">CONCEPT</span><b>An r/place-style public canvas</b>
+      <small>A shared canvas the whole internet can paint, one pixel per
+      person per time window, with the cooldown enforced by contract. The
+      full history replays as a timelapse because the canvas is an
+      append-only record.</small></li>
+    <li><span class="st concept">CONCEPT</span><b>Conference artifacts funded by the ticket</b>
+      <small>Attendees check in and contribute to a collective piece that is
+      then stored for decades, paid from a slice of the ticket price. No
+      partner lined up yet; the mechanics are verified.</small></li>
+    <li><span class="st concept">CONCEPT</span><b>Comments on any static page, Disqus without the server</b>
+      <small>Viewers of a published page leave notes that persist and
+      overlay on the page. This is the use case the whole line of work
+      started from.</small></li>
+    <li><span class="st concept">CONCEPT</span><b>Community playlists and queues</b>
+      <small>Anyone can add to a shared queue; the contract enforces what
+      kinds of entries are allowed and how often each person can add.</small></li>
   </ul>
 
   <div class="needs">
-    <b>What has to be built</b>
+    <b>What has to be built, and where</b>
     <ul>
-      <li>SDK support for the new access-rule contracts <span class="who">(synapse-sdk; today the capability is contract-only)</span></li>
-      <li>Indexed reads: list and filter records by their labels without downloading everything <span class="who">(SDK front-end for events that indexers already capture)</span></li>
-      <li>Restore the sponsored-writes example contract <span class="who">(merged in August, reverted only for release timing)</span></li>
+      <li>SDK support for the access-rule contracts <span class="who">(synapse-sdk)</span></li>
+      <li>Indexed reads: list and filter records by label without downloading everything <span class="who">(SDK surface over events indexers already capture)</span></li>
+      <li>Restore the sponsored-public-writing reference contract <span class="who">(filecoin-services; merged in August, reverted for release timing)</span></li>
     </ul>
   </div>
 </section>
 
 <section class="tier later">
   <span class="band">TIER 3 · PLATFORM FEATURES AFTER THAT</span>
-  <h2>Economies inside the applications, at consumer scale</h2>
-  <p class="lede">With tier 2 in place, three platform features turn these
-  applications from demos into products: payment hooks, passkey sign-in, and
-  cheaper crowd writes. Each one also upgrades everything in tiers 1 and 2.</p>
+  <h2>Economies inside the apps, at consumer scale</h2>
+  <p class="lede">With tier 2 in place, four platform features turn open
+  applications into products. Each also upgrades every example above:
+  the Tamagotchi gains paid adoptions and cosmetics, the public canvas
+  gains paid features and event-scale crowds, and the hand-off chain gains
+  escrowed payment per step and AI agents that participate on their own.
+  That last combination, verifiable multi-party work with no coordinator
+  to run or trust, is the shape our agent go-to-market is built around.</p>
 
-  <h3 class="label">Functionality this adds</h3>
+  <h3 class="label">Capabilities this adds</h3>
   <div class="caps">
     <span>Paid actions: entry fees, upgrades, bounties, auctions</span>
-    <span>Sign in with a passkey, no wallet or crypto knowledge</span>
-    <span>Thousands of simultaneous contributors at around a third of a cent per action</span>
-    <span>AI agents that pay and get paid without a human in the loop</span>
+    <span>Passkey sign-in, no wallet or crypto knowledge</span>
+    <span>Crowd-scale writes at ~$0.003 per action</span>
+    <span>AI agents that pay and get paid autonomously</span>
   </div>
 
-  <h3 class="label">What that looks like</h3>
+  <h3 class="label">What that opens</h3>
   <ul class="examples">
-    <li><b>Applications that fund their own storage</b>
-      <small>Entry fees and upgrades flow back to the account paying the
-      storage bill. The app pays for itself; the operator never holds user
-      funds.</small></li>
-    <li><b>Work marketplaces with built-in escrow</b>
+    <li><span class="st concept">CONCEPT</span><b>Apps that fund their own storage</b>
+      <small>Entry fees and upgrade purchases flow to the account paying the
+      storage bill, so the app covers its own costs and the operator never
+      holds user funds.</small></li>
+    <li><span class="st proto">PROTOTYPED</span><b>Work marketplaces with built-in escrow</b>
       <small>Payment for a step releases when the next participant accepts
-      the work, with a protocol fee taken natively. The payment rails
-      shipped with FOC already support this shape; it needs a hardened
-      reference contract, not new protocol.</small></li>
-    <li><b>Consumer-scale participation</b>
-      <small>Contract-enforced write rules currently cost about a cent per
-      contribution because each one is its own transaction. Batching
-      independently signed contributions cuts that to roughly a third of a
-      cent and removes the throughput ceiling.</small></li>
-    <li><b>Compliance-grade record keeping as a product</b>
-      <small>The deletion-veto pattern from tier 1, packaged so a buyer
-      audits a product instead of a bespoke contract: pay once, retain
-      provably for N years.</small></li>
+      the work, with a platform fee taken natively. The shipped payment
+      rails support this composition; it needs a hardened reference
+      contract, not new protocol.</small></li>
+    <li><span class="st proto">PROTOTYPED</span><b>Retention as a product</b>
+      <small>The tier 1 write-once pattern packaged so a compliance buyer
+      audits a product, not a bespoke contract: pay once, retain provably
+      for N years.</small></li>
   </ul>
 
   <div class="needs">
-    <b>What has to be built</b>
+    <b>What has to be built, and where</b>
     <ul>
-      <li>Charge-the-writer payment hooks and a reference escrow contract <span class="who">(filecoin-pay + filecoin-services)</span></li>
-      <li>Passkey signature support proven on-chain <span class="who">(the access-rule design already anticipates it; the gas cost needs measuring)</span></li>
+      <li>Charge-the-writer payment hooks and a reference escrow contract <span class="who">(filecoin-pay, filecoin-services)</span></li>
+      <li>Passkey signatures proven on-chain <span class="who">(the access-rule design anticipates them; gas cost needs measuring)</span></li>
       <li>Batched writes carrying many individual signatures in one transaction <span class="who">(filecoin-services)</span></li>
-      <li>Let delegated agent keys make payments <span class="who">(today only the owner wallet can; blocks autonomous agent economies)</span></li>
+      <li>Payment permissions for delegated agent keys <span class="who">(today only the owner wallet can pay)</span></li>
     </ul>
-  </div>
-
-  <div class="backfill">
-    <b>The compounding effect:</b> each tier upgrades the ones before it.
-    The mascot gains adoption fees and cosmetics people buy. The public
-    canvas gains paid features and event-scale crowds. The signed-handoff
-    pipeline gains escrowed payment per step and agents that participate
-    on their own, which is the story our agent go-to-market needs: verifiable
-    multi-party work where no participant has to run or trust a coordinator.
   </div>
 </section>
 
+<div class="closing">
+  <div>
+    <h3>The ask</h3>
+    <ol>
+      <li>SDK path to the access-rule contracts (opens all of tier 2)</li>
+      <li>Indexed reads (makes tier 2 usable at consumer scale)</li>
+      <li>Payment hooks plus the escrow reference (opens tier 3 economies)</li>
+    </ol>
+  </div>
+  <div>
+    <h3>Known limits and risks</h3>
+    <p>Writes take 30 to 60 seconds, so real-time apps are out of scope.
+    Open participation invites spam and abuse; rate limits and blocklists
+    are contract-enforceable, but content moderation policy is ours to
+    define. Reads bill the app's account, so a popular free app is a
+    bandwidth cost with no revenue unless tier 3 lands. Cost figures use
+    the current calibration price list and move with it.</p>
+  </div>
+</div>
+
 <footer>
-  Statuses verified against filecoin-services main (calibnet v1.4.0
-  deployment) and synapse-sdk 1.2.1 on 2026-09-01. Engineering detail,
-  source citations, and the ranked feature-ask list:
+  Every status was verified against the shipped contracts (filecoin-services
+  main, calibnet v1.4.0 deployment) and synapse-sdk 1.2.1 on 2026-09-01.
+  Engineering detail, source citations, and the full ranked feature list:
   <code>research/2026-09-01-expansion-synthesis.md</code> and
   <code>research/clusters/</code> in the foc-collab repo.
 </footer>
