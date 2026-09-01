@@ -23,8 +23,12 @@
   }
   @keyframes pulse { 50% { opacity: 0.25; } }
   @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
-  #games { list-style: none; padding: 0; text-align: left; }
+  #games { text-align: left; }
+  #games h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin: 1.1rem 0 0.2rem; }
+  #games ul { list-style: none; padding: 0; margin: 0; }
   #games li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.45rem 0.2rem; border-bottom: 1px solid var(--line); }
+  #games li.your-turn a { font-weight: 700; }
+  #games li.your-turn a::before { content: '● '; color: var(--accent); }
   #status { min-height: 1.5em; }
   .row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.8rem 0; flex-wrap: wrap; }
   [hidden] { display: none !important; }
@@ -41,8 +45,11 @@
 
   <section id="lobby" hidden>
     <div class="row"><button id="create">create a game</button></div>
-    <ul id="games"></ul>
+    <div id="games"></div>
     <p class="meta" id="lobby-empty" hidden>No games yet — create the first one.</p>
+    <p class="meta">Your seat lives in this browser (same seat in every tab).
+    To play against yourself, open the invite link in a private window or
+    another browser.</p>
   </section>
 
   <section id="game" hidden>
@@ -99,7 +106,8 @@ const $ = (id) => document.getElementById(id)
 let pieces = []
 let busy = null // label of the in-flight append, e.g. 'placing your X'
 let busyStage = null // transport progress: uploading / stored / confirming
-let pendingMove = null // { cell, seat } shown optimistically on the board
+let pendingMove = null // { cell, seat, sentAt } shown optimistically until the log confirms it
+const PENDING_TIMEOUT_MS = 3 * 60000 // give up on a submitted move after 3 minutes
 let lastError = null
 let prevBoard = null // to highlight the opponent's latest move
 
@@ -110,18 +118,39 @@ function renderLobby() {
   create.textContent = busy ?? 'create a game'
   const games = lobby(pieces)
   $('lobby-empty').hidden = games.length > 0
-  $('games').replaceChildren(...games.map((g) => {
-    const li = document.createElement('li')
-    const a = document.createElement('a')
-    a.href = `?game=${encodeURIComponent(g.game)}`
-    a.textContent = g.name ?? g.game
-    const span = document.createElement('span')
-    span.className = 'meta'
-    const mine = seatOf(g, token)
-    span.textContent = status(g) + (mine ? ` — you are ${mine}` : '')
-    li.append(a, span)
-    return li
-  }))
+  const mine = games.filter((g) => seatOf(g, token) != null)
+  const open = games.filter((g) => seatOf(g, token) == null && g.seats.O == null)
+  const rest = games.filter((g) => seatOf(g, token) == null && g.seats.O != null)
+  $('games').replaceChildren(
+    ...lobbySection('your games', mine),
+    ...lobbySection('open to join', open),
+    ...lobbySection('other games', rest),
+  )
+}
+
+function lobbySection(title, games) {
+  if (games.length === 0) return []
+  const h = document.createElement('h2')
+  h.textContent = title
+  const ul = document.createElement('ul')
+  ul.append(...games.map(lobbyRow))
+  return [h, ul]
+}
+
+function lobbyRow(g) {
+  const li = document.createElement('li')
+  const mine = seatOf(g, token)
+  if (mine != null && mine === g.next && g.winner == null && g.seats.O != null) {
+    li.classList.add('your-turn')
+  }
+  const a = document.createElement('a')
+  a.href = `?game=${encodeURIComponent(g.game)}`
+  a.textContent = g.name ?? g.game
+  const span = document.createElement('span')
+  span.className = 'meta'
+  span.textContent = status(g) + (mine != null ? ` — you are ${mine}` : '')
+  li.append(a, span)
+  return li
 }
 
 function renderGame() {
@@ -135,8 +164,8 @@ function renderGame() {
   $('board').replaceChildren(...state.board.map((cell, i) => {
     const b = document.createElement('button')
     b.textContent = cell ?? ''
-    b.disabled = busy != null || cell != null || state.winner != null
-      || seat !== state.next || state.seats.O == null
+    b.disabled = busy != null || pendingMove != null || cell != null
+      || state.winner != null || seat !== state.next || state.seats.O == null
     if (pendingMove != null && pendingMove.cell === i && cell == null) {
       b.textContent = pendingMove.seat
       b.classList.add('pending')
@@ -147,18 +176,19 @@ function renderGame() {
     b.onclick = () => append(
       { v: 1, type: 'move', game: gameId, seq: state.seq, cell: i },
       `placing your ${seat}`,
-      { cell: i, seat },
+      { cell: i, seat, sentAt: Date.now() },
     )
     return b
   }))
-  const yourTurn = seat != null && seat === state.next && state.winner == null && state.seats.O != null
-  document.title = yourTurn && busy == null ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
+  const yourTurn = seat != null && seat === state.next && state.winner == null
+    && state.seats.O != null && busy == null && pendingMove == null
+  document.title = yourTurn ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
   const statusEl = $('status')
   statusEl.textContent = statusLine(state, seat, joinable)
   statusEl.classList.toggle('error', busy == null && lastError != null)
   statusEl.classList.toggle('busy', busy != null)
   const waitingOnOpponent = busy == null && lastError == null && state.winner == null
-    && seat != null && seat !== state.next && state.seats.O != null
+    && seat != null && state.seats.O != null && (seat !== state.next || pendingMove != null)
   statusEl.classList.toggle('waiting', waitingOnOpponent)
   $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
 }
@@ -166,6 +196,7 @@ function renderGame() {
 function statusLine(state, seat, joinable) {
   if (busy != null && busyStage != null) return `${busy} — ${busyStage}`
   if (busy != null) return `${busy}`
+  if (pendingMove != null) return 'move sent — finalizing on-chain, your opponent will see it shortly'
   if (lastError != null) return lastError
   if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
     return `${status(state)} — you are ${seat}, waiting for your opponent`
@@ -184,6 +215,12 @@ async function refresh() {
     const oldBoard = fold(gameId, pieces).board
     const newBoard = fold(gameId, next).board
     if (oldBoard.some((cell, i) => cell !== newBoard[i])) prevBoard = oldBoard
+    if (pendingMove != null && newBoard[pendingMove.cell] != null) {
+      pendingMove = null // the log has caught up with the optimistic mark
+    } else if (pendingMove != null && Date.now() - pendingMove.sentAt > PENDING_TIMEOUT_MS) {
+      pendingMove = null
+      lastError = 'your move has not appeared in the log — the board is unlocked, check it and retry'
+    }
   }
   pieces = next
   render()
@@ -204,9 +241,8 @@ async function append(payload, label, move = null) {
     })
     busy = null
     busyStage = null
+    // pendingMove stays until refresh() sees the move in the log
     await refresh()
-    pendingMove = null
-    render()
     return true
   } catch (err) {
     console.error(err)

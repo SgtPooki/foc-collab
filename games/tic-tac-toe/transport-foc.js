@@ -84,9 +84,17 @@ export async function createFocTransport(config) {
     pollMs: 8000,
     async append(piece, onProgress) {
       onProgress?.('uploading')
-      await ctx.upload(encodePiece(piece), {
-        onStored: () => onProgress?.('stored by provider'),
-        onPiecesAdded: () => onProgress?.('confirming on-chain'),
+      // Resolve once the piece is stored and its transaction submitted —
+      // the move is then effectively irrevocable. Final confirmation
+      // continues in the background; the poll loop observes the truth.
+      await new Promise((resolve, reject) => {
+        ctx.upload(encodePiece(piece), {
+          onStored: () => onProgress?.('stored by provider'),
+          onPiecesAdded: () => {
+            onProgress?.('submitted on-chain')
+            resolve()
+          },
+        }).then(() => onProgress?.('confirmed'), reject)
       })
     },
     async list() {
