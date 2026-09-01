@@ -104,6 +104,18 @@ revival costs a chunk. Decisions and reasoning:
 - **Generations (planned, not optional)**: each death/revival is a new
   corgi generation; past corgis' final states live on a memorial wall,
   itself funded or forgotten. Death becomes lore instead of failure.
+- **The corgi park (Russell 2026-09-01): people BUY corgis to add.**
+  Deposits above an adoption threshold spawn a corgi owned by the
+  sender; THE corgi (gen-0 mascot) is happy when it has company, so
+  loneliness is cured diegetically — community members ARE the friends.
+  Sprites derived deterministically from the owner's address hash
+  (identicon-style: coat/size/bounce/accessory) — no art pipeline,
+  verifiably unique, screenshot-bait. The screen becomes a live
+  visualization of the supporter base: a crowded park IS a funded park.
+  v2: naming/cosmetics as paid ACL pieces (the pay-for-features tier),
+  and optional per-corgi vitality — lapsed corgis wander to the
+  memorial wall. Every verb (feed, adopt, name, revive) remains a
+  payment into runway; the population is the treasury wearing fur.
 
 Scope check: v1 is SMALLER than tic-tac-toe (reads + wallet transfers
 only). The authorizer/pieces layer is the v2 game, not a prerequisite.
