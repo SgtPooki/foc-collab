@@ -173,12 +173,14 @@
 <section class="tier next">
   <span class="band">TIER 2 · ONE ROUND OF TOOLING AWAY</span>
   <h2>Open participation: strangers join from a link</h2>
-  <p class="lede">The contracts already allow public, rule-governed writing.
-  Three tooling gaps keep it invite-only: the SDK has no path to the new
-  access rules, records cannot be searched or filtered without downloading
-  everything, and the reference contract for sponsored public writing was
-  reverted for release timing and needs restoring. This is SDK work, not
-  protocol work.</p>
+  <p class="lede">The contracts already allow public, rule-governed writing,
+  and our team can hand-build any one of these applications today by calling
+  the contracts directly; that build is the next item on our engineering
+  plan. What the tooling below changes is who else can build them: without
+  SDK support every such app is a bespoke effort by us, records cannot be
+  searched or filtered without downloading everything, and the reference
+  contract for sponsored public writing (reverted for release timing) needs
+  restoring. Tooling work, not protocol work.</p>
 
   <h3 class="label">Capabilities this adds</h3>
   <div class="caps">
@@ -209,9 +211,9 @@
   </ul>
 
   <div class="needs">
-    <b>What has to be built, and where</b>
+    <b>What makes this a platform capability, not a bespoke build</b>
     <ul>
-      <li>SDK support for the access-rule contracts <span class="who">(synapse-sdk)</span></li>
+      <li>SDK support for the access-rule contracts <span class="who">(synapse-sdk; we can call them raw today, outside developers realistically cannot)</span></li>
       <li>Indexed reads: list and filter records by label without downloading everything <span class="who">(SDK surface over events indexers already capture)</span></li>
       <li>Restore the sponsored-public-writing reference contract <span class="who">(filecoin-services; merged in August, reverted for release timing)</span></li>
     </ul>
