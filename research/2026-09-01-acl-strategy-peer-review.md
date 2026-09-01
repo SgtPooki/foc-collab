@@ -7,13 +7,17 @@ four converged on the same corrections.
 
 ## Consensus corrections (act on these)
 
-1. **Moderation is a launch requirement, not polish (4/4).** The canvas
-   and its timelapse are immutable and public; malicious pixel art is
-   forever. The only mechanism that fully works is pre-commit: the
-   authorizer checks a blocklist BEFORE the piece lands (one SLOAD,
-   negligible gas). Complement: a frontend CID blocklist the fold skips,
-   and/or an admin "erase" piece type that bypasses cooldowns. Design the
-   moderation policy before pixels, not after.
+1. **Moderation is a launch requirement, not polish (4/4).**
+   Correction (Russell, 2026-09-01): the reviewers' "immutable forever"
+   framing was too strong — the payer CAN remove pieces after the fact
+   via SchedulePieceRemovals, and getPieces already filters removed
+   pieces, so a removed piece drops out of every client's fold and out
+   of the re-folded timelapse. Real posture: post-hoc removal by the
+   payer for bad CONTENT, plus a pre-commit authorizer blocklist for bad
+   ACTORS (one SLOAD, negligible gas). Caveats: removal is payer-
+   initiated on chain cadence (minutes), and copies fetched before
+   removal persist with whoever fetched them. Still design the policy —
+   who watches, who holds removal rights, response time — before pixels.
 
 2. **Sybil resistance decides whether cooldowns mean anything (3/4).**
    Free browser keys = infinite identities = cooldowns are decoration; a
