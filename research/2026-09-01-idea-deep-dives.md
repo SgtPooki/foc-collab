@@ -85,22 +85,25 @@ revival costs a chunk. Decisions and reasoning:
     fundraiser urgency (streamer-donation-goal psychology).
   - Life (months): nonlinear runway thresholds — thriving > 3mo,
     sick < 1mo, critical < 2wk.
-- **Death is real, but an event, not wallpaper.** Runway at zero -> death
-  scene -> the page becomes a memorial with a revival campaign (ghost,
-  epitaph, visible chunky "vet bill" threshold). A dead-corgi-forever
-  screen reads as "Filecoin is dead" — the memorial-with-a-goal is
-  engaging AND honest.
-- **The backstop is the protocol itself**: unrevived long enough, storage
-  settlement lapses and the data terminates — the corgi doesn't stay
-  dead on screen, it DISAPPEARS (page included, if hosted on its own
-  data set). Russell's "maybe that's what we deserve" is the truthful
-  version; keep it.
+- **Death triggers BEFORE runway zero (Russell's correction).** At zero
+  the SPs may actually drop the data, so a memorial triggered at zero
+  may never be seen. Instead: death is declared while runway remains
+  (e.g. under 30 days), and the remaining runway IS the memorial
+  window — the memorial page counts down its own existence ("corgi died
+  Oct 3; this memorial ceases to exist in 23 days"). Revival inside the
+  window resurrects; the window closing is true disappearance. Not
+  theater — settlement mechanics rendered as narrative.
+- **Whale-proofing (Russell): one 500-USDFC donor must not end the
+  game.** Mood is driven by DISTINCT RECENT FEEDERS, not amounts: a
+  whale buys life (runway) but cannot buy happiness — a fully-funded,
+  lonely corgi mopes until the community shows up. Money keeps it
+  alive; only people keep it happy.
 - Launch-side mitigations only: a modest genesis endowment so death
   isn't day-one, and NO quiet team bailouts (a secretly-immortal corgi
   fakes the demo).
-- Optional lore mechanic: generations — each death/revival is a new
-  corgi; past corgis' final states live on a memorial wall, itself
-  funded or forgotten.
+- **Generations (planned, not optional)**: each death/revival is a new
+  corgi generation; past corgis' final states live on a memorial wall,
+  itself funded or forgotten. Death becomes lore instead of failure.
 
 Scope check: v1 is SMALLER than tic-tac-toe (reads + wallet transfers
 only). The authorizer/pieces layer is the v2 game, not a prerequisite.
