@@ -10,19 +10,19 @@ server anywhere.
 
 1. **Connect-4 / checkers** — the planned next rung: flashy enough to
    screen-record, fold logic still trivial.
-2. **Silent auction** — blind bids as moves; the latency IS the tension.
+2. **Silent auction** — blind bids as moves; the latency IS the tension. -- Russell love's
 3. **Paint war** — teams claim pixels on a shared 64x64 canvas, one pixel
-   per move; cooldown forces pick-your-battles diplomacy.
+   per move; cooldown forces pick-your-battles diplomacy. -- Russell love's
 4. **Battleship ("Telegraph")** — hidden fleets, one shot per epoch;
    slowness makes every shot matter. Needs a commit-reveal fold (hash the
    fleet in the create piece, reveal at game end) — a genuinely new
    primitive worth proving.
 5. **Repeated prisoner's dilemma league** — 8 players round-robin,
-   COOPERATE/DEFECT pieces, on-chain league table; slow rounds = strategy.
+   COOPERATE/DEFECT pieces, on-chain league table; slow rounds = strategy. -- Russell investigate
 6. **Collaborative jazz ("Fugue")** — four voice lines, each player
    appends one note per epoch; no turns, perpetual jam, state is the score.
 7. **Conway's Life seeding** — 100 players claim cells, then the grid
-   evolves deterministically; players bet on what survives.
+   evolves deterministically; players bet on what survives. -- Russell love's
 8. **Word ladder ("Babel")** — each move is a word one edit from the last;
    first to break the chain loses.
 9. **Chess/correspondence classics** — the obvious fit; chess clocks
@@ -31,13 +31,20 @@ server anywhere.
     session keys coordinating through nothing but a data set.
 
 ## Non-game uses of the same log
+Russell: I think some of the below would be WAY better and easier to do if we could actually restrict session keys to specific data-sets.
+
+(That restriction is shipping: dataset-level programmable ACLs merged in
+filecoin-services#536, already in Calibnet v1.4.0, mainnet release in
+progress — a per-data-set authorizer contract replaces the account-wide
+session key and can rate-limit/allowlist/size-cap writers. See the update
+in FEASIBILITY.md. Everything below gets easier once tooling catches up.)
 
 - **Guestbook / viewer notes** — the original viewer-saves idea; the game
   proved every primitive it needs.
 - **Slow bulletin board** — one post per epoch per key; spam-resistant by
   physics.
 - **Collaborative playlist** — enqueue pieces, deterministic queue, anyone
-  can publish a player.
+  can publish a player.-- Russell love's this could be an internet jukebox.. 
 - **Append-only wiki ("The Archive")** — entries fold into pages; no
   deletes; the log is the database.
 - **Shared whiteboard** — one stroke per epoch; the cooldown is the

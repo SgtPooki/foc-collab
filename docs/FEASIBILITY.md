@@ -94,8 +94,24 @@ Consequences:
 - **Mode 2** (BYOW) is unaffected: whoever writes, pays and owns.
 - filecoin-pin **#690** (session revocation broken) stays a hard
   prerequisite for any non-throwaway mode 1, exactly as the idea doc says.
-- A data-set-scoped / size-capped grant is the contract-level feature
-  request this spike substantiates.
+- **Update 2026-09-01: the contract-level fix exists and is shipping.**
+  FilOzone/filecoin-services#536 ("Optional dataset-level programmable
+  acls", merged 2026-08-20, in the Calibnet v1.4.0 deployment, mainnet
+  release in progress) lets a payer attach an `IDataSetAuthorizer` to one
+  data set; FWSS then delegates that data set's entire write-authorization
+  decision to it. The authorizer is state-mutating (can rate-limit,
+  consume nonces, cap piece counts/sizes via `operationData`) and recovers
+  signers itself "on whatever curve it supports". For this app that means:
+  a permissive or sponsored authorizer on just the games data set replaces
+  the embedded account-wide session key (blast radius collapses to the one
+  data set), per-epoch move cooldowns become contract law, and — if P-256
+  recovery proves practical on FEVM — players' existing browser WebCrypto
+  identities could authorize writes directly, with no shared key at all.
+  An `ExampleSponsoredDataSet` authorizer (exactly the publisher-sponsors-
+  anyone-writes pattern) landed as #540 and was reverted only for release
+  hygiene (#599); expect it back after the release. Remaining gaps: SDK/
+  filecoin-pin tooling support, and the payer still funds all writes, so
+  spend caps belong in the authorizer.
 
 ## Test plan (in order, all artifacts in this repo)
 
