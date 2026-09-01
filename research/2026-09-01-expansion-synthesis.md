@@ -89,6 +89,18 @@ feature-ask ranking.
 8. **Consumer-scale reads billing** — per-reader or sponsored CDN
    egress (social #5) and author-attributed removal ergonomics (pass
    piece ids at add time).
+9. **Session-key reach into FilecoinPay** (baton #2) —
+   setOperatorApproval/deposit are msg.sender-only, so session-key
+   agents cannot participate economically (bonds, operator approvals)
+   without their owner wallet. Distinct from, and additive to, the
+   actor-pays ask.
+10. **Piece-metadata headroom** (baton #4) — 3 keys x 96 B = 384 B
+    total is too tight for DAG-relay edges and compliance protocol
+    fields; digest-only packing is the interim pattern.
+11. **App-level encryption recipe** (baton #5) — nothing in the stack
+    addresses private cross-org relays; a documented envelope-
+    encryption convention (who holds keys, how successors decrypt) is
+    the missing piece for enterprise pipelines.
 
 ## What this changes in the build order
 
