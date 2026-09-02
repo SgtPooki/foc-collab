@@ -56,6 +56,13 @@ export function runwayEpochs(unreserved, ratePerEpoch) {
   return Number(unreserved / ratePerEpoch)
 }
 
+/** Epochs until a dead corgi's storage may be terminated: time to deficit plus the lockup period. */
+export function memorialWindow(unreserved, ratePerEpoch) {
+  if (ratePerEpoch <= 0n) return Infinity
+  const toDeficit = Number(unreserved / ratePerEpoch) // negative once in deficit
+  return Math.max(0, toDeficit + LOCKUP_PERIOD_EPOCHS)
+}
+
 export function lifeOf(runwayInEpochs, config = DEFAULT_CONFIG) {
   if (runwayInEpochs === Infinity) return 'unfunded'
   const days = runwayInEpochs / EPOCHS_PER_DAY
@@ -212,9 +219,12 @@ export function fold(input, config = DEFAULT_CONFIG) {
   const memorial = life === 'dead'
     ? {
         diedEpoch: generations.length > 0 ? generations[generations.length - 1].died.epoch : account.epoch,
-        // The memorial exists until the protocol's lockup tail ends. Gross
-        // coverage (funds / rate) is the epochs the remaining funds pay for.
-        endsInEpochs: gross === Infinity ? Infinity : gross,
+        // The memorial exists until the protocol's lockup tail ends: the
+        // account reaches deficit when unreserved funds hit zero, settlement
+        // stalls there, and a terminated rail's endEpoch is that stall point
+        // plus lockupPeriod (FilecoinPayV1 terminateRail). Fixed lockups such
+        // as CDN holds are not streaming spend, so gross coverage overstates it.
+        endsInEpochs: memorialWindow(account.unreserved, account.ratePerEpoch),
         reviveNeeds: deathLine > account.unreserved ? deathLine - account.unreserved : 0n,
       }
     : null

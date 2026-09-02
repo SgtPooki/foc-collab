@@ -24,7 +24,7 @@ import { chromium } from 'playwright'
 import { createPublicClient, createWalletClient, formatUnits, http as httpTransport } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { withdraw } from '@filoz/synapse-core/pay'
-import { chainOf, readCorgi, tokenOf } from './chain.js'
+import { chainOf, readCorgi, tokenOf, waitForEpoch, waitForReceipt } from './chain.js'
 import { EPOCHS_PER_DAY, DEFAULT_CONFIG, fold } from './fold.js'
 
 const DIR = process.env.E2E_DIR ?? 'dist/corgi'
@@ -100,9 +100,12 @@ async function feedViaUi(amount) {
   await page.locator('#feed-status.ok').filter({ hasText: /^Fed / }).waitFor({ timeout: 600000 })
   const status = await page.locator('#feed-status').textContent()
   log('feed status:', status)
-  const hash = (await page.locator('#feed-status a').getAttribute('href')).split('/tx/')[1]
-  await page.locator('#feed-log').filter({ hasText: hash.slice(0, 10) }).waitFor({ timeout: 120000 })
-  return hash
+  const epoch = Number(status.match(/in epoch (\d+)/)[1])
+  await waitForEpoch(rpc, epoch)
+  // tx hashes are not stable identifiers on Filecoin (the block may carry a
+  // different hash than eth_sendRawTransaction returned), so match by epoch
+  await page.locator(`#feed-log td[title="epoch ${epoch}"]`).first().waitFor({ timeout: 180000 })
+  return epoch
 }
 
 // ------------------------------------------------------------ happy path
@@ -117,9 +120,9 @@ assert.ok((await page.locator('#feed-log tr').count()) >= before.state.feed.leng
 assert.equal(cdnHits, 0, 'no runtime CDN requests')
 
 const rowsBefore = await page.locator('#feed-log tr').count()
-const hash = await feedViaUi('0.05')
+const fedEpoch = await feedViaUi('0.05')
 const after = await snapshot()
-assert.ok(after.state.feed.some((f) => f.txHash === hash && f.from.toLowerCase() === feeder.address.toLowerCase()), 'deposit attributed to the feeder on-chain')
+assert.ok(after.state.feed.some((f) => f.epoch === fedEpoch && f.from.toLowerCase() === feeder.address.toLowerCase()), 'deposit attributed to the feeder on-chain')
 assert.equal(await page.locator('#feed-log tr').count(), rowsBefore + 1, 'feed log grew by one')
 assert.ok(after.state.runwayEpochs > before.state.runwayEpochs - 20, 'runway did not fall')
 log('happy path PASS; runway now', after.state.runwayEpochs, 'epochs')
@@ -129,14 +132,19 @@ if (process.env.E2E_DEATH_ARC === '1') {
   assert.ok(corgiKey, 'PRIVATE_KEY (corgi payer) missing')
   const corgiWallet = createWalletClient({ account: privateKeyToAccount(corgiKey), chain, transport: httpTransport() })
   const { state, read } = await snapshot()
-  assert.notEqual(state.life, 'dead', 'corgi must be alive to demonstrate death')
-  const rate = read.account.ratePerEpoch
-  const keep = rate * BigInt(Math.floor(DEFAULT_CONFIG.deathDays * EPOCHS_PER_DAY * 0.6)) // leave ~4 days
-  const amount = read.account.unreserved - keep
-  assert.ok(amount > 0n, 'nothing to withdraw')
-  log(`withdrawing ${formatUnits(amount, 18)} USDFC from the corgi to force death`)
-  const wh = await withdraw(corgiWallet, { token, amount })
-  assert.equal((await rpc.waitForTransactionReceipt({ hash: wh })).status, 'success')
+  if (state.life === 'dead') {
+    log('corgi is already dead (a previous run drained it); skipping the withdrawal')
+  } else {
+    const rate = read.account.ratePerEpoch
+    const keep = rate * BigInt(Math.floor(DEFAULT_CONFIG.deathDays * EPOCHS_PER_DAY * 0.6)) // leave ~4 days
+    const amount = read.account.unreserved - keep
+    assert.ok(amount > 0n, 'nothing to withdraw')
+    log(`withdrawing ${formatUnits(amount, 18)} USDFC from the corgi to force death`)
+    const wh = await withdraw(corgiWallet, { token, amount })
+    const receipt = await waitForReceipt(rpc, wh)
+    assert.equal(receipt.status, 'success')
+    await waitForEpoch(rpc, Number(receipt.blockNumber))
+  }
 
   const dead = await snapshot()
   assert.equal(dead.state.life, 'dead')

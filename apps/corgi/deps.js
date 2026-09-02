@@ -7,4 +7,4 @@
 export { calibration, mainnet } from '@filoz/synapse-core/chains'
 export { accounts, deposit, resolveAccountState } from '@filoz/synapse-core/pay'
 export { approve, balance } from '@filoz/synapse-core/erc20'
-export { createPublicClient, createWalletClient, custom, formatUnits, http, parseAbiItem, parseUnits } from 'viem'
+export { createPublicClient, createWalletClient, custom, formatUnits, http, parseAbiItem, parseEventLogs, parseUnits } from 'viem'

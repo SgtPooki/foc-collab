@@ -17,7 +17,9 @@ const dep = (from, amount, epoch, txHash = `0x${epoch.toString(16)}`) => ({ from
 /** Account whose unreserved balance today buys `runwayDays` days. */
 function account(runwayDays, epoch = 100_000, ratePerEpoch = RATE) {
   const unreserved = runwayDays === Infinity ? 0n : days(runwayDays)
-  return { epoch, ratePerEpoch, unreserved, funds: unreserved + days(30) }
+  // funds also hold the 30-day reserve plus a fixed lockup (like a CDN hold)
+  // that is not streaming spend, so gross coverage overstates the window
+  return { epoch, ratePerEpoch, unreserved, funds: unreserved + days(30) + days(365) }
 }
 
 test('runway and life thresholds', () => {
@@ -106,7 +108,7 @@ test('death before zero: runway under the death line is dead with a memorial cou
   // born when funded, died when runway crossed 7 days: 43 days after the deposit
   assert.equal(s.generations[0].born.epoch, now - 45 * EPOCHS_PER_DAY)
   assert.equal(s.generations[0].died.epoch, now - 45 * EPOCHS_PER_DAY + 43 * EPOCHS_PER_DAY + 1)
-  assert.equal(s.memorial.endsInEpochs, 35 * EPOCHS_PER_DAY) // gross coverage: 5 + 30 days of funds
+  assert.equal(s.memorial.endsInEpochs, 35 * EPOCHS_PER_DAY) // 5 days to deficit + 30-day lockup tail, fixed lockup ignored
   assert.equal(s.memorial.reviveNeeds, days(2))
 })
 
@@ -125,6 +127,15 @@ test('revival opens a new generation; the memorial wall keeps the old one', () =
   assert.equal(s.generations[1].born.by, B)
   assert.equal(s.generations[1].born.epoch, t0 + 30 * EPOCHS_PER_DAY)
   assert.equal(s.life, 'dead')
+})
+
+test('memorial window shrinks after deficit and never goes negative', () => {
+  const now = 100_000
+  const deep = fold({ payer: PAYER, account: { epoch: now, ratePerEpoch: RATE, unreserved: -days(10), funds: days(20) }, deposits: [dep(A, days(20), now - 30 * EPOCHS_PER_DAY)] })
+  assert.equal(deep.life, 'dead')
+  assert.equal(deep.memorial.endsInEpochs, 20 * EPOCHS_PER_DAY) // 30 - 10 days already in deficit
+  const gone = fold({ payer: PAYER, account: { epoch: now, ratePerEpoch: RATE, unreserved: -days(40), funds: 0n }, deposits: [dep(A, days(20), now - 60 * EPOCHS_PER_DAY)] })
+  assert.equal(gone.memorial.endsInEpochs, 0)
 })
 
 test('a deposit too small to clear the death line does not revive', () => {

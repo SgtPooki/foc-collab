@@ -89,6 +89,10 @@ function lifeCopy(s) {
 }
 
 function moodCopy(s) {
+  if (s.life === 'dead') {
+    if (s.distinctFeeders === 0) return 'Nobody has fed it this week. Whoever feeds it next brings it back.'
+    return `${s.distinctFeeders} address${s.distinctFeeders === 1 ? '' : 'es'} fed it this week. They are the ones who can bring it back.`
+  }
   const company = s.park.length > 0 ? ` It has ${s.park.length} adopted corgi${s.park.length === 1 ? '' : 's'} for company.` : ''
   if (s.mood === 'lonely') return `Nobody has fed it in the last ${foldConfig.moodWindowDays} days. Money keeps it alive; only people keep it happy.${company}`
   if (s.mood === 'content') return `One address fed it this week. It is content, not happy. A second feeder would change that.${company}`
@@ -154,7 +158,7 @@ function renderMemorial(s, clock) {
   const diedWhen = gen ? fmtDate(clock, gen.died.epoch) : 'before the first recorded deposit'
   $('memorial-text').textContent = `Runway fell under ${foldConfig.deathDays} days at ${diedWhen} (epoch ${s.memorial.diedEpoch}). The remaining funds keep paying the storage provider through the lockup tail, and when they run out the provider may delete the data. This page is that countdown.`
   $('memorial-countdown').textContent = s.memorial.endsInEpochs === Infinity ? 'no spend, no end' : `This memorial ceases to exist in ${fmtDays(s.memorial.endsInEpochs)}`
-  $('memorial-note').textContent = `Estimated from gross coverage (funds divided by lockup rate). Revive it by feeding at least ${usd(s.memorial.reviveNeeds, 4)} USDFC, which lifts runway back over the death line and starts generation ${s.generation + 1}.`
+  $('memorial-note').textContent = `Runway to deficit plus the 30-day lockup period, which is how long a terminated rail keeps paying the provider from the reserve. Revive it by feeding at least ${usd(s.memorial.reviveNeeds, 4)} USDFC, which lifts runway back over the death line and starts generation ${s.generation + 1}.`
 }
 
 function renderPark(s, clock) {
@@ -201,7 +205,8 @@ function render(v) {
   $('payer-link').href = `${explorer}/address/${s.payer}`
   $('headline').textContent = s.life === 'dead' ? 'In memoriam' : `${s.life[0].toUpperCase()}${s.life.slice(1)} and ${s.mood}`
   $('lede').textContent = `${lifeCopy(s)} ${moodCopy(s)}`
-  $('account-line').textContent = `Account: ${usd(account.funds, 4)} USDFC in Filecoin Pay, spending ${usd(account.ratePerEpoch * BigInt(EPOCHS_PER_DAY), 4)} USDFC a day. Gross coverage ${fmtDays(s.grossCoverageEpochs)}.`
+  const locked = account.funds - (account.unreserved > 0n ? account.unreserved : 0n)
+  $('account-line').textContent = `Account: ${usd(account.funds, 4)} USDFC in Filecoin Pay, ${usd(locked, 4)} of it held as reserve and lockups, spending ${usd(account.ratePerEpoch * BigInt(EPOCHS_PER_DAY), 4)} USDFC a day.`
   $('adopt-threshold').textContent = usd(foldConfig.adoptionThreshold)
   $('contracts-line').textContent = `Filecoin Pay ${net.contracts.filecoinPay.address} · USDFC ${token} · payer ${s.payer}`
   renderLife(s); renderMood(s); renderMascot(s); renderMemorial(s, clock); renderPark(s, clock); renderFeedLog(s, clock); renderWall(s, clock)
@@ -287,7 +292,8 @@ async function submitFeed(ev) {
         feedStatus(`${STAGE_COPY[name]}${hash ? ` ${txLink(hash)}` : ''}`)
       },
     })
-    feedStatus(`Fed ${usd(amount, 4)} USDFC in epoch ${result.epoch}. ${txLink(result.hash)}. Refreshing the corgi.`, 'ok')
+    feedStatus(`Fed ${usd(amount, 4)} USDFC in epoch ${result.epoch}. ${txLink(result.hash)}. Waiting for the chain to index it, then refreshing the corgi.`, 'ok')
+    await chain.waitForEpoch(client, result.epoch)
     await load({ quiet: true })
     feedStatus(`Fed ${usd(amount, 4)} USDFC in epoch ${result.epoch}. ${txLink(result.hash)}`, 'ok')
   } catch (err) {

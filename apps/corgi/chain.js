@@ -169,6 +169,21 @@ export async function epochClock(client) {
   return (epoch) => headTime - (headEpoch - epoch) * EPOCH_SECONDS
 }
 
+/**
+ * Waits until the RPC's head is past `epoch` by a margin. Filecoin RPCs can
+ * return a receipt for a block before eth_getLogs indexes that block, so
+ * callers refresh after this rather than straight after the receipt.
+ */
+export async function waitForEpoch(client, epoch, { margin = 2, pollMs = 4000, timeoutMs = 10 * 60_000 } = {}) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const head = Number(await client.getBlockNumber({ cacheTime: 0 }))
+    if (head >= epoch + margin) return head
+    await new Promise((r) => setTimeout(r, pollMs))
+  }
+  throw new Error(`head did not reach epoch ${epoch + margin}`)
+}
+
 /** Everything the fold needs, read in parallel. */
 export async function readCorgi(client, config, opts = {}) {
   const chain = chainOf(config.chain)
@@ -183,6 +198,28 @@ export async function readCorgi(client, config, opts = {}) {
 }
 
 // ---------------------------------------------------------------- wallet
+
+const RECEIPT_POLL_MS = 4000
+const RECEIPT_TIMEOUT_MS = 15 * 60_000
+
+/**
+ * Poll for a receipt. viem's own receipt waiter fetches the current block
+ * by number while the receipt is missing, and Filecoin null rounds (epochs
+ * with no block) make that call fail, so this only asks for the receipt and
+ * treats not-found as "keep waiting".
+ */
+export async function waitForReceipt(client, hash, { timeoutMs = RECEIPT_TIMEOUT_MS, pollMs = RECEIPT_POLL_MS } = {}) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      return await client.getTransactionReceipt({ hash })
+    } catch (err) {
+      if (err?.name !== 'TransactionReceiptNotFoundError') throw err
+    }
+    await new Promise((r) => setTimeout(r, pollMs))
+  }
+  throw new Error(`no receipt for ${hash} after ${Math.round(timeoutMs / 60_000)} minutes`)
+}
 
 function hexChainId(chain) {
   return `0x${chain.id.toString(16)}`
@@ -233,16 +270,25 @@ export async function feed({ wallet, client, chain, token, payer, amount, onStag
     stage('approve:sign')
     const hash = await sdk.approve(wallet, { token, amount, spender: chain.contracts.filecoinPay.address })
     stage('approve:pending', { hash })
-    const receipt = await client.waitForTransactionReceipt({ hash })
+    const receipt = await waitForReceipt(client, hash)
     if (receipt.status !== 'success') throw new Error('approve transaction reverted')
   }
   stage('deposit:sign')
   const hash = await sdk.deposit(wallet, { token, to: payer, amount })
   stage('deposit:pending', { hash })
-  const receipt = await client.waitForTransactionReceipt({ hash })
+  const receipt = await waitForReceipt(client, hash)
   if (receipt.status !== 'success') throw new Error('deposit transaction reverted')
-  stage('done', { hash, epoch: Number(receipt.blockNumber) })
-  return { hash, epoch: Number(receipt.blockNumber) }
+  // Filecoin can report a different tx hash in the block than the one
+  // eth_sendRawTransaction returned. The DepositRecorded log in the receipt
+  // is the record the feed log will show, so report its coordinates.
+  const [event] = sdk.parseEventLogs({ abi: [DEPOSIT_EVENT], logs: receipt.logs })
+  const result = {
+    hash: event?.transactionHash ?? receipt.transactionHash,
+    epoch: Number(receipt.blockNumber),
+    logIndex: event ? Number(event.logIndex) : null,
+  }
+  stage('done', result)
+  return result
 }
 
 export const { formatUnits, parseUnits } = sdk
