@@ -98,3 +98,21 @@ zero on-chain. Deck states it precisely: August jump is existing
 customers settling more, self-serve wallets trickle in, no new qualified
 logo. The FWSS-only "$21-40/mo" from the Infura doc was a subset; total
 Filecoin Pay settled is higher and ramping.
+
+## Published to FOC (2026-09-02)
+
+Encrypted (FEE, AES-256-GCM, PBKDF2 password) and published to Filecoin
+Onchain Cloud (calibration) via filecoin-pin, viewed through the
+script-execution-patched foc-viewer.
+- Encrypted deck blob CID: bafkreigoxdmsomqeqzkxrnmcchidmhqrhr2jlkglz5j7ssqqpwuik3kmja
+- Patched viewer CID: bafkreiaahawajxc4ysxhjr2z5537oz7hrs66bfh3pqatmw4bznjuvhdbmq
+- Share URL (no password in it):
+  https://bafkreiaahawajxc4ysxhjr2z5537oz7hrs66bfh3pqatmw4bznjuvhdbmq.ipfs.inbrowser.link/#url=https%3A%2F%2Fbafkreigoxdmsomqeqzkxrnmcchidmhqrhr2jlkglz5j7ssqqpwuik3kmja.ipfs.dweb.link%2F
+- Password: shared out of band (scratchpad/deck-password.txt this session; NOT committed).
+- Blob served via dweb.link (unwraps UnixFS to raw FEE bytes; the SP
+  /piece/ URL returns CAR-wrapped bytes and must NOT be used as the blob URL).
+- Verified in a real browser: decrypts on password entry, all 10 slides +
+  3 flywheels render, nav works, password never enters the URL, zero CDN
+  calls, no page errors.
+- Caveat: dweb.link/inbrowser.link are public gateways; availability rides
+  on them plus calibration SPs. For durable sharing, repin on mainnet.
