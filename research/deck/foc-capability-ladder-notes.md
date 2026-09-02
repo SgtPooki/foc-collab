@@ -33,3 +33,29 @@ in-browser password decryption; password shared out of band.
 - The NYC "$500K/$2M ARR" figure Russell half-remembers was not found in
   the NYC docs (the $500K present is Q1 pod budget); left out of the
   deck rather than guessed.
+
+
+## v1.4 pricing correction (2026-09-02)
+
+The April Pricing Sensitivity sheet used proposed numbers that the shipped
+v1.4 contracts changed. Deck now uses the current constants from
+filecoin-services main, PriceListUSDFC.sol (after #583 pricing update and
+#592 proving 0.20 -> 0.12):
+- Storage $2.5/TiB/mo/copy (default 2 copies)
+- addPieces $0.008 base per call + $0.003 per piece
+- Egress $0.007/GB (the April sheet's $0.14/GB was ~20x too high; egress
+  is now a minor line, so write fees dominate MORE, not less)
+- Dataset fee $0.12/mo, create $0.025, removals $0.007, terminate $0.006,
+  lifecycle reserve $0.50
+Worked example on the deck (pricing sheet's SMB scenario at v1.4 rates,
+10 TiB stored, 100k pieces added/mo, ~61/batch):
+  add = 100000*0.003 + ceil(100000/61)*0.008 = $300 + ~$13 = ~$313
+  storage = 10*2.5*2 = $50 ; egress (say 500GB) = $3.50
+  add-fee share ~= 313/(313+50+3.5+~1) ~= 86%
+So "write fees are the biggest line for piece-heavy workloads" holds and
+is stronger at v1.4 than the old 53-69% (egress collapsed). The share is
+workload-dependent (large-piece workloads shift toward storage); the deck
+states the concrete SMB example rather than an "every tier" claim.
+Moat attribution corrected: cross-checked with Codex/Cursor/Gemini and
+verified against each named product; NOT described as human third-party
+review.

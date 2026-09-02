@@ -1,259 +1,289 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>FOC Capability Ladder</title>
-<!--
-  Single-file slide deck template. Self-contained: inline CSS + JS, no external resources
-  (so it renders offline and from IPFS). Each slide is one <section class="slide">.
-  Keyboard: arrows / space / PageUp-Down navigate, Home / End jump, F toggles fullscreen.
-  The counter reads slides.length, so it stays correct as you add or remove slides.
-  Replace the example slides below. Keep the components; delete what you do not use.
--->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The First Bearing</title>
 <style>
   :root {
-    --bg: #0b1020;
-    --panel: #121a30;
-    --ink: #e8edf7;
-    --muted: #93a1bf;
-    --accent: #2bb9ff;
-    --accent2: #7c5cff;
-    --good: #36d399;
-    --warn: #f6b73c;
-    --line: #243150;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --bg: #0a0e1a; --bg2: #0e1530; --panel: #131c33; --panel2: #182142;
+    --ink: #eaf0fb; --muted: #8ea0c4; --dim: #5b6b8c;
+    --accent: #2bb9ff; --accent2: #7c5cff; --good: #36d399; --warn: #ffb020; --bad: #ff5470;
+    --line: #26324f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--sans); }
-  .deck { height: 100vh; width: 100vw; overflow: hidden; position: relative; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--sans); }
+  .deck { height: 100vh; width: 100vw; position: relative; }
   .slide {
-    position: absolute; inset: 0; display: none;
-    padding: 5vh 7vw; flex-direction: column; justify-content: center;
-    animation: fade .25s ease;
+    position: absolute; inset: 0; padding: 7vh 8vw 9vh; opacity: 0; visibility: hidden;
+    transform: translateX(40px); transition: opacity .38s ease, transform .38s ease;
+    display: flex; flex-direction: column; justify-content: center; pointer-events: none;
   }
-  .slide.active { display: flex; }
-  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .slide.active { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }
+  .slide.prev { transform: translateX(-40px); }
+  @media (prefers-reduced-motion: reduce) { .slide { transition: opacity .2s; transform: none !important; } }
 
-  h1 { font-size: clamp(28px, 4.2vw, 56px); line-height: 1.05; margin: 0 0 18px; letter-spacing: -.02em; }
-  h2 { font-size: clamp(22px, 3vw, 40px); margin: 0 0 22px; letter-spacing: -.02em; }
-  h2 .kicker { display:block; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; font-weight: 700; }
-  p { font-size: clamp(16px, 1.5vw, 21px); line-height: 1.5; color: var(--ink); margin: 0 0 14px; max-width: 62ch; }
-  .muted { color: var(--muted); }
-  .big { font-size: clamp(34px, 6vw, 84px); font-weight: 800; letter-spacing: -.03em; line-height: 1; }
-  .accent { color: var(--accent); }
-  .accent2 { color: var(--accent2); }
-  .good { color: var(--good); }
-  .warn { color: var(--warn); }
+  .kicker { font: 700 13px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  h1 { font-size: clamp(34px, 6.4vw, 92px); line-height: .98; margin: 0 0 20px; letter-spacing: -.035em; font-weight: 800; text-wrap: balance; }
+  h2 { font-size: clamp(24px, 3.6vw, 50px); line-height: 1.04; margin: 0 0 20px; letter-spacing: -.03em; font-weight: 800; text-wrap: balance; }
+  p { font-size: clamp(15px, 1.5vw, 21px); line-height: 1.5; margin: 0 0 14px; max-width: 66ch; color: var(--ink); }
+  p.sub { color: var(--muted); }
+  .muted { color: var(--muted); } .dim { color: var(--dim); }
+  .accent { color: var(--accent); } .accent2 { color: var(--accent2); }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
   .mono { font-family: var(--mono); }
+  .reveal { opacity: 0; transform: translateY(14px); }
+  .slide.active .reveal { animation: rise .5s ease forwards; }
+  .slide.active .reveal:nth-child(2) { animation-delay: .08s; }
+  .slide.active .reveal:nth-child(3) { animation-delay: .16s; }
+  .slide.active .reveal:nth-child(4) { animation-delay: .24s; }
+  .slide.active .reveal:nth-child(5) { animation-delay: .32s; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; animation: none !important; } }
 
-  .formula {
-    font-family: var(--mono); font-size: clamp(15px, 1.9vw, 26px);
-    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    padding: 18px 22px; margin: 6px 0 18px; line-height: 1.6; color: var(--ink);
-  }
-  .formula .op { color: var(--muted); }
+  /* chrome */
+  .bar { position: fixed; left: 0; top: 0; height: 3px; background: var(--accent); z-index: 20; transition: width .38s ease; }
+  .hud { position: fixed; bottom: 14px; right: 18px; z-index: 20; font: 600 12px/1 var(--mono); color: var(--dim); letter-spacing: .1em; }
+  .hint { position: fixed; bottom: 14px; left: 18px; z-index: 20; font: 500 11px/1 var(--mono); color: var(--dim); letter-spacing: .06em; }
+  .foot { position: absolute; left: 8vw; right: 8vw; bottom: 3vh; color: var(--dim); font-size: 12px; border-top: 1px solid var(--line); padding-top: 9px; max-width: none; }
 
-  table { border-collapse: collapse; width: 100%; font-size: clamp(13px, 1.4vw, 19px); }
-  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; font-size: .8em; letter-spacing: .06em; text-transform: uppercase; }
-  td.num, th.num { text-align: right; font-family: var(--mono); }
-  tr.total td { border-top: 2px solid var(--accent); border-bottom: none; font-weight: 800; }
-  tbody tr:hover { background: rgba(43,185,255,.05); }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: stretch; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .card b { display: block; margin-bottom: 5px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .tag { font: 700 10px/1.5 var(--mono); letter-spacing: .08em; padding: 2px 8px; border-radius: 999px; }
+  .tag.live { color: var(--good); background: #123021; } .tag.proto { color: var(--warn); background: #33270e; } .tag.concept { color: var(--muted); background: #1c2540; }
 
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
-  .card .label { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .card .v { font-size: clamp(24px, 3vw, 40px); font-weight: 800; letter-spacing: -.02em; }
-  .card .sub { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  /* slide 2: scale */
+  .scale { display: grid; grid-template-columns: 1fr; gap: 12px; max-width: 1000px; }
+  .scale .now { font-size: clamp(48px, 10vw, 130px); font-weight: 800; letter-spacing: -.04em; line-height: .9; color: var(--warn); }
+  .barcmp { display: grid; grid-template-columns: 210px 1fr; gap: 10px 16px; align-items: center; margin-top: 8px; }
+  .barcmp .lbl { font: 600 13px/1.3 var(--mono); color: var(--muted); text-align: right; }
+  .barcmp .track { height: 26px; background: var(--panel); border-radius: 6px; overflow: hidden; position: relative; }
+  .barcmp .fill { height: 100%; border-radius: 6px; }
+  .barcmp .val { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font: 700 12px/1 var(--mono); }
 
-  ul.tight { margin: 0; padding-left: 1.1em; }
-  ul.tight li { font-size: clamp(15px, 1.5vw, 21px); line-height: 1.5; margin-bottom: 12px; max-width: 62ch; }
-  ul.tight li::marker { color: var(--accent); }
+  /* slide 3: cost bar */
+  .costbar { display: flex; height: 74px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); max-width: 1000px; margin: 6px 0 4px; }
+  .costbar div { display: flex; align-items: center; justify-content: center; font: 700 13px/1.2 var(--mono); text-align: center; padding: 0 6px; color: #08101f; }
+  .revenue0 { max-width: 1000px; margin-top: 12px; border: 1px dashed var(--bad); border-radius: 10px; padding: 10px 14px; color: var(--bad); font-weight: 700; }
 
-  .footnote { position: absolute; left: 7vw; right: 7vw; bottom: 3.5vh; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 10px; }
-  .tag { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 10px; }
-  .quote { border-left: 3px solid var(--accent2); padding: 4px 0 4px 18px; color: var(--ink); font-style: italic; max-width: 56ch; }
+  /* flywheel */
+  .fw { position: relative; width: min(62vh, 60vw); aspect-ratio: 1; margin: 4px auto 0; }
+  .fw .ring { position: absolute; border-radius: 50%; border: 2px dashed var(--accent); opacity: .4; }
+  .fw .ring.r1 { inset: 3%; animation: fwspin 30s linear infinite; }
+  .fw .ring.r2 { inset: 16%; border-style: dotted; border-color: var(--accent2); opacity: .35; }
+  .slide.active .fw .ring.r1 { animation: fwtry 2.4s cubic-bezier(.3,.9,.5,1) forwards; }
+  @keyframes fwtry { 0%{transform:rotate(0)} 55%{transform:rotate(58deg)} 66%{transform:rotate(52deg)} 74%{transform:rotate(56deg)} 82%{transform:rotate(53deg)} 100%{transform:rotate(54deg)} }
+  @keyframes fwspin { to { transform: rotate(360deg); } }
+  .fw .hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); text-align: center; width: 36%; }
+  .fw .hub b { color: var(--bad); font: 700 clamp(12px,1.3vw,17px)/1.1 var(--sans); } .fw .hub span { display:block; color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .fw .node { position: absolute; transform: translate(-50%,-50%); width: clamp(94px,14vw,150px); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; text-align: center; font: 600 clamp(11px,1.1vw,14px)/1.25 var(--sans); }
+  .fw .node .step { display: block; font: 10px/1 var(--mono); color: var(--dim); margin-bottom: 3px; letter-spacing: .05em; }
+  .fw .node.stuck { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+  .slide.active .fw .node.stuck { animation: jam .5s ease 1.1s 3; }
+  @keyframes jam { 0%,100%{transform:translate(-50%,-50%)} 25%{transform:translate(-52%,-50%)} 75%{transform:translate(-48%,-50%)} }
+  .fw .node.stuck .t { display: block; color: var(--bad); font: 700 10px/1 var(--mono); margin-top: 4px; }
 
-  .hud { position: fixed; bottom: 16px; right: 20px; font-family: var(--mono); font-size: 13px; color: var(--muted); z-index: 10; }
-  .hud b { color: var(--ink); }
-  .bar { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); z-index: 10; transition: width .2s; }
-  .nav { position: fixed; bottom: 14px; left: 20px; z-index: 10; display: flex; gap: 8px; }
-  .nav button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; }
-  .nav button:hover { border-color: var(--accent); }
-  .hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 12px; z-index: 10; }
+  /* mini flywheel corner */
+  .mini { position: absolute; top: 6vh; right: 8vw; width: 62px; height: 62px; border-radius: 50%; border: 2px dashed var(--dim); opacity: .8; }
+  .mini::before { content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); top: -7px; left: 50%; transform: translateX(-50%); box-shadow: 0 0 10px var(--accent); }
+  .mini.b1::before { background: var(--bad); box-shadow: 0 0 10px var(--bad); }
+
+  /* ladder */
+  .rungs { display: grid; gap: 12px; max-width: 1000px; }
+  .rung { display: grid; grid-template-columns: 150px 1fr; gap: 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .rung .lv { font: 800 clamp(15px,1.6vw,21px)/1 var(--sans); color: var(--accent); }
+  .rung .lv span { display: block; font: 600 11px/1.3 var(--mono); color: var(--dim); margin-top: 5px; letter-spacing: .06em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+  .chip.gap { border-color: var(--warn); color: var(--warn); }
+
+  table { width: 100%; border-collapse: collapse; font-size: clamp(13px,1.3vw,17px); max-width: 1050px; }
+  th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--accent); font: 700 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .09em; }
+  a { color: var(--accent); }
+  .ask { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .ask .n { font: 800 30px/1 var(--mono); color: var(--accent2); margin-bottom: 8px; }
+  .ask .card b { font-size: clamp(15px,1.5vw,20px); }
+  .ask .card .feat { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+  .ask .card .gtm { color: var(--good); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 8px; }
+  @media (max-width: 820px) { .grid2, .grid3, .ask { grid-template-columns: 1fr; } .barcmp { grid-template-columns: 120px 1fr; } .mini { display: none; } }
 </style>
 </head>
 <body>
 <div class="bar" id="bar"></div>
 <div class="deck" id="deck">
 
-  <!-- 1 · TITLE -->
-  <section class="slide active">
-    <h1>The FOC flywheel is missing its <span class="accent">first turn</span></h1>
-    <p class="muted">A capability review: what the platform powers today, what each missing feature unlocks, and what not building them costs. Internal, FilOz. September 2026.</p>
-    <div class="footnote">Sources: FOC Pod Charter + Q3 budget update, Pricing Sensitivity sheet, Infura migration evaluation, H2 GTM Strategy deck, filecoin-services main (calibnet v1.4.0) and synapse-sdk 1.2.1 source, verified 2026-09-01/02. Figure-by-figure math in the companion notes.</div>
+  <!-- 1 -->
+  <section class="slide">
+    <p class="kicker reveal">Filecoin Onchain Cloud · internal · Sep 2026</p>
+    <h1 class="reveal">The flywheel exists.<br>The <span class="bad">first bearing</span> is jammed.</h1>
+    <p class="sub reveal">Builders can't make money on FOC yet. Neither can we, for the same reason. This is the math, the honest moat, and the three things that free the wheel.</p>
+    <div class="foot reveal">Sourced against filecoin-services v1.4 and synapse-sdk, the pod's own budget docs, and the pricing sheet. Figures and citations in the companion notes.</div>
   </section>
 
-  <!-- 2 · THE GAP -->
+  <!-- 2 -->
   <section class="slide">
-    <h2><span class="kicker">where we are</span>Settled revenue is $21-40 per month. The targets are thousands to millions.</h2>
-    <div class="grid3" style="margin-top:6px">
-      <div class="card"><div class="big">$21.62</div><p class="muted">FWSS settled in August (Jul $39.46, Jun $25.30)</p></div>
-      <div class="card"><div class="big">&gt;$15K</div><p class="muted">pod H2 target: paid/settled via FOC before end of 2026</p></div>
-      <div class="card"><div class="big">$20M</div><p class="muted">network ARR goal FOC contributes to, with 20 paying brands</p></div>
+    <p class="kicker reveal">where we are</p>
+    <h2 class="reveal">Twelve months in, settled revenue is a rounding error.</h2>
+    <div class="scale">
+      <div class="reveal"><span class="now">$22<span style="font-size:.35em;color:var(--muted)">/mo</span></span></div>
+      <div class="barcmp reveal">
+        <div class="lbl">pod settled today</div><div class="track"><div class="fill" style="width:1.2%;background:var(--warn)"></div><div class="val warn" style="right:auto;left:14px">~$22/mo</div></div>
+        <div class="lbl">pod H2 goal</div><div class="track"><div class="fill" style="width:9%;background:var(--accent)"></div><div class="val accent">&gt;$15K settled by EO2026</div></div>
+        <div class="lbl">network goal FilOz feeds</div><div class="track"><div class="fill" style="width:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div><div class="val" style="color:#08101f">$20M ARR · 20 brands</div></div>
+      </div>
     </div>
-    <p style="margin-top:18px">H1 went fine against its own bar: the $1K ARR target was hit (852 USDFC). But there has been no new customer since the Storacha cohort (about $1,320 ARR), and the H2 north star (5 power users at $500+/mo) needs something to change.</p>
-    <div class="footnote">Settled figures and "no new customer" quote: Infura migration evaluation, 2026-08-19. Targets: Pod Charter Q3 budget update; H2 GTM Strategy deck.</div>
+    <p class="sub reveal" style="margin-top:16px">The H1 target ($1K ARR) was hit, at 852 USDFC. But there has been <b class="ink">no new customer since the Storacha cohort</b>, and the largest live deal on the table is ~$105/mo. Bars are log-ish for legibility; the gap is real.</p>
+    <div class="foot reveal">Pod-settled and "no new customer": Infura migration evaluation, 2026-08-19. Goals: Pod Charter Q3 update (pod) and H2 GTM deck ($20M is the network goal FilOz contributes to, not a pod number).</div>
   </section>
 
-  <!-- 3 · WHY -->
+  <!-- 3 -->
   <section class="slide">
-    <h2><span class="kicker">why the wheel does not turn</span>Building on FOC loses money by construction</h2>
-    <table>
-      <tr><th>Cost line</th><th>Today</th><th>Evidence</th></tr>
-      <tr><td>Cost to build</td><td>Raw contract calls; no SDK path to the new access rules; every app is a bespoke integration</td><td class="muted">synapse-sdk source: authorizer exists only in the generated ABI</td></tr>
-      <tr><td>Cost to run</td><td>The operator's account pays storage, every write, and every read</td><td class="muted">In FOC's own pricing scenarios, per-piece write fees are 53-69% of the monthly bill at every tier, egress another 24-37%</td></tr>
-      <tr><td>Revenue</td><td>Zero native surface. No custody means builders bring their own billing stack</td><td class="muted">Payment hooks and escrow do not exist yet as products</td></tr>
+    <p class="kicker reveal">why the wheel won't turn</p>
+    <h2 class="reveal">Success makes it worse: every winning app is a bigger unpaid bill.</h2>
+    <p class="reveal">For a piece-heavy app (10 TiB, 100k writes/month) the monthly bill splits like this:</p>
+    <div class="costbar reveal">
+      <div style="width:85%;background:var(--bad)">write fees ~$313</div>
+      <div style="width:13%;background:var(--accent)">storage ~$50</div>
+      <div style="width:2%;background:var(--dim)"></div>
+    </div>
+    <p class="sub reveal" style="margin-top:6px">Writes ($0.003/piece + $0.008/call) dominate; storage is small; egress ($0.007/GB) is a sliver. <span class="dim">Piece-heavy SMB example at v1.4 rates; large-file workloads shift toward storage.</span></p>
+    <div class="revenue0 reveal">and native revenue = $0. There is no way to charge users on FOC.</div>
+    <p class="reveal" style="margin-top:14px">A free app is a growing liability. A paid app must build its own custody, fiat onramp, and billing. <b class="ink">We decline to build that layer for the same reason a builder would: it is hard and legally heavy. That shared refusal is the jammed bearing.</b></p>
+    <div class="foot reveal">Prices: filecoin-services v1.4 PriceListUSDFC.sol. Bill split recomputed from the pricing sheet's SMB scenario at v1.4 rates (see notes).</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <p class="kicker reveal">the model</p>
+    <h2 class="reveal" style="text-align:center">It wants to turn. It seizes at step 1.</h2>
+    <div class="fw reveal">
+      <div class="ring r1"></div><div class="ring r2"></div>
+      <div class="hub"><b>stuck here</b><span>nothing downstream turns</span></div>
+      <div class="node stuck" style="left:50%;top:8%"><span class="step">step 1</span>builders who can cover their FOC costs<span class="t">JAMMED</span></div>
+      <div class="node" style="left:84%;top:31%"><span class="step">step 2</span>more apps</div>
+      <div class="node" style="left:84%;top:69%"><span class="step">step 3</span>users + demand</div>
+      <div class="node" style="left:50%;top:92%"><span class="step">step 4</span>onchain ARR</div>
+      <div class="node" style="left:16%;top:69%"><span class="step">step 5</span>SP supply + tooling</div>
+      <div class="node" style="left:16%;top:31%"><span class="step">step 6</span>cheaper + better</div>
+    </div>
+    <p class="sub reveal" style="text-align:center;max-width:74ch;margin:12px auto 0">Grade every feature by one question: does it free step 1? Until it turns, the GTM bets downstream are running on a wheel that isn't moving.</p>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="mini b1"></div>
+    <p class="kicker reveal">the honest moat</p>
+    <h2 class="reveal">No single primitive is ours. The bundle is, for now.</h2>
+    <table class="reveal">
+      <tr><th>What FOC offers</th><th>Where it already exists</th></tr>
+      <tr><td>Publicly verifiable funding</td><td>on-chain escrows; Arweave's pay-once endowment (opaque only on AWS / Stripe)</td></tr>
+      <tr><td>Contract-gated writes</td><td>any L1/L2 smart contract; Walrus policies on Sui</td></tr>
+      <tr><td>Storage proofs</td><td>Arweave (SPoRA), Walrus (Red Stuff); a decentralized-storage baseline</td></tr>
+      <tr><td>Delete / shutdown veto</td><td>S3 Object Lock; Arweave (permanent by default)</td></tr>
+      <tr><td>Coordinator-free shared state</td><td>Arweave AO, any rollup, or a signed log on S3 anchored to a chain</td></tr>
     </table>
-    <p style="margin-top:16px">A successful free app is just a bigger bill. Nobody spins a flywheel that starts with losing money.</p>
-    <div class="footnote">Fee-share figures: Pricing Sensitivity sheet scenario model (hobbyist $0.37/mo to enterprise $19K/mo; write fees dominate storage at every tier).</div>
+    <p class="reveal" style="margin-top:12px">Nobody else offers all of it in one contract system. <b class="ink">Our defensibility equals our integration completeness</b>, and that lead is time-bounded: Walrus or Arweave/AO could bundle-catch-up in 12 to 18 months.</p>
+    <div class="foot reveal">Comparisons cross-checked with three coding models and verified against each named product; not a human third-party review.</div>
   </section>
 
-  <!-- 4 · FLYWHEEL -->
+  <!-- 6 -->
   <section class="slide">
-    <h2><span class="kicker">the model</span>The flywheel exists. The first bearing is stuck.</h2>
-    <div class="formula">profitable builders <span class="op">&rarr;</span> apps <span class="op">&rarr;</span> users + demand <span class="op">&rarr;</span> onchain ARR <span class="op">&rarr;</span> SP supply + tooling <span class="op">&rarr;</span> cheaper, better <span class="op">&rarr;</span> more builders</div>
-    <p style="margin-top:16px">Every feature in this deck is graded by one question: which bearing does it grease? Most of the high-value ones act on the first: making it possible for a builder to profit.</p>
-    <p class="muted">This matches the assignment GTM already set: map storage needs to FOC's unique capabilities, find where S3 is a bad fit, and pick small niches with breakout growth potential.</p>
-    <div class="footnote">Assignment framing: Juan's FDS advice, H2 GTM Strategy deck (July 2026).</div>
-  </section>
-
-  <!-- 5 · WHAT IS REAL -->
-  <section class="slide">
-    <h2><span class="kicker">the foundation, verified in source</span>The primitives shipped. We proved them with working software.</h2>
+    <div class="mini b1"></div>
+    <p class="kicker reveal">proved in code</p>
+    <h2 class="reveal">The primitives work today. We ran them, not just read them.</h2>
     <div class="grid2">
-      <div class="card"><b class="good">SHIPPED</b><p>Per-dataset programmable access rules: a contract decides who writes, with rate limits and roles. Live on calibration (v1.4.0); mainnet release in progress this week.</p></div>
-      <div class="card"><b class="good">SHIPPED</b><p>Anyone can fund an app's storage account, permissionlessly, with sender-attributed on-chain receipts. Deletion and shutdown can be vetoed until a chosen date.</p></div>
-      <div class="card"><b class="good">LIVE</b><p>A two-player game running on calibration with no server: every move is a signed record, both browsers compute the same board, end-to-end tested across isolated browsers.</p></div>
-      <div class="card"><b class="warn">PATTERN</b><p>Write-once retention, multi-step signed hand-offs, and crowd apps with contract-enforced cooldowns: all expressible today with custom contracts and app code.</p></div>
+      <div class="card reveal"><b class="good">LIVE</b>Two-player game on calibration with no server: every move is a signed record, both browsers fold the same board. End-to-end tested across isolated browsers.</div>
+      <div class="card reveal"><b class="accent">SHIPPED</b>Per-dataset access rules (a contract decides who writes) and permissionless, attributed funding of an app's storage account. Both in v1.4 on calibration.</div>
+      <div class="card reveal"><b class="warn">PATTERN</b>Write-once retention, signed multi-step hand-offs, and crowd apps with contract-enforced cooldowns: all buildable now with custom contracts.</div>
+      <div class="card reveal"><b class="dim">THE CATCH</b>To gate writes, a builder must fork, deploy, and operate their own <a href="https://github.com/FilOzone/filecoin-services/pull/540">example access-control contract</a>. There is no managed layer and no SDK helper.</div>
     </div>
-    <div class="footnote">Every status verified against filecoin-services main and synapse-sdk 1.2.1; file-and-line citations in the research repo (foc-collab/research/).</div>
+    <div class="foot reveal">Statuses verified against filecoin-services main and synapse-sdk; calibration v1.4.0 deployed, mainnet release underway as of 2026-09-01.</div>
   </section>
 
-  <!-- 6 · WHAT THAT MEANS -->
+  <!-- 7 -->
   <section class="slide">
-    <h2><span class="kicker">tier 1, in plain terms</span>Serverless apps work today, for participants we set up</h2>
-    <div class="grid2">
-      <div class="card"><b>Turn-based games, Words-with-Friends style <span class="good mono" style="font-size:12px">LIVE</span></b><p class="muted">Any two browsers on Earth; moves land in 30-60 seconds; no backend anywhere.</p></div>
-      <div class="card"><b>A community pet that eats money <span class="mono muted" style="font-size:12px">CONCEPT</span></b><p class="muted">Tamagotchi whose health bar is the real funding balance of its own storage. Every feeding is an attributed payment; run out and the protocol gives about 30 days before the data is at risk.</p></div>
-      <div class="card"><b>Hand-off chains with signed receipts <span class="warn mono" style="font-size:12px">PROTOTYPED</span></b><p class="muted">Work passes between people or AI agents; each step signed, ordered, verifiable by outsiders. The shape our agent provenance bet needs.</p></div>
-      <div class="card"><b>Write-once records, like S3 Object Lock <span class="warn mono" style="font-size:12px">PATTERN</span></b><p class="muted">Deletion vetoed until year N; $1,000 funds a terabyte for roughly 16 years at the current price list, with a publicly checkable balance.</p></div>
+    <div class="mini b1"></div>
+    <p class="kicker reveal">what frees the bearing</p>
+    <h2 class="reveal">Two rungs of work turn a cost center into a business.</h2>
+    <div class="rungs">
+      <div class="rung reveal"><div class="lv">Rung 1<span>strangers can join</span></div>
+        <div><p style="margin:0 0 8px">Open, rule-governed participation from a link. Missing pieces:</p>
+        <div class="chips"><span class="chip gap">SDK path to access rules</span><span class="chip gap">indexed reads (search, feeds)</span><span class="chip gap">reusable access-control (no Solidity)</span></div></div></div>
+      <div class="rung reveal"><div class="lv">Rung 2<span>the app earns</span></div>
+        <div><p style="margin:0 0 8px">Native economies, consumer scale. Missing pieces:</p>
+        <div class="chips"><span class="chip gap">payment hooks + escrow</span><span class="chip gap">batched multi-signer writes</span><span class="chip gap">passkey sign-in</span><span class="chip gap">agent-key payments</span></div></div></div>
     </div>
-    <div class="footnote">16-year figure: $2.5/TiB/mo per copy, 2 copies, current list; storage prices move. Corgi window: 30-day payment lockup tail, verified in FilecoinPayV1.</div>
+    <p class="sub reveal" style="margin-top:12px">Batching cuts contract-enforced writes from ~$0.011 to ~$0.003 each for actions that can share a transaction (per-player-signature games batch less). Passkeys and payment hooks are anticipated in the access-rule design; gas cost is unmeasured.</p>
   </section>
 
-  <!-- 7 · THE MOAT -->
+  <!-- 8 -->
   <section class="slide">
-    <h2><span class="kicker">the honest moat</span>No primitive is exclusive. The bundle is the moat, and it is unfinished.</h2>
-    <p>Three independent external reviews converged: every primitive (verifiable funding, gated writes, proofs, retention, coordinator-free state) exists somewhere else in pieces. What nobody else offers is all of it in one contract system: writes, proofs, balances, provider compensation, and app-level authorization together.</p>
-    <div class="formula">our defensibility <span class="op">=</span> our integration completeness</div>
-    <p class="muted">The reviews' one warning: "without cheap writes, good retrieval, and SDK support, it is mostly positioning." The threats are Walrus DX parity, Arweave/AO app frameworks, and our own write economics.</p>
-    <div class="footnote">Sell it as: auditable retention with programmable write rules, no coordinator server, at cold-storage economics. Not as "only possible on FOC".</div>
-  </section>
-
-  <!-- 8 · TIER 2 -->
-  <section class="slide">
-    <h2><span class="kicker">one round of tooling away</span>Open participation: strangers join from a link</h2>
-    <p>The contracts already allow public, rule-governed writing; we can hand-build any single app now. Three tooling gaps decide whether anyone else can:</p>
-    <table>
-      <tr><th>Gap</th><th>Where</th><th>What it opens</th></tr>
-      <tr><td>SDK path to access-rule contracts</td><td>synapse-sdk</td><td>every authorizer app stops being bespoke</td></tr>
-      <tr><td>Indexed reads (filter by label, activity feeds)</td><td>SDK over already-indexed events</td><td>search, embeddable views, consumer scale</td></tr>
-      <tr><td>Sponsored-public-writing reference contract</td><td>filecoin-services (merged in August, reverted for release timing)</td><td>zero-onboarding contributors</td></tr>
+    <div class="mini b1"></div>
+    <p class="kicker reveal">where it pays off</p>
+    <h2 class="reveal">Every destination lands on a bet GTM already made.</h2>
+    <table class="reveal">
+      <tr><th>Destination</th><th>Existing bet</th><th>Evidence</th></tr>
+      <tr><td>Signed hand-off chains with receipts (human-in-the-loop)</td><td>Agents · provenance</td><td class="good">named in the GTM plan</td></tr>
+      <tr><td>Viewer notes / saves on published pages</td><td>IPFS · Filecoin Pin</td><td class="good">the one bet with product-market-fit evidence</td></tr>
+      <tr><td>Retention-locked records</td><td>Compliance · finance partners</td><td class="warn">willingness-to-pay unproven</td></tr>
+      <tr><td>Self-funding apps (pet, canvas, events)</td><td>brand · payments demo</td><td class="dim">demand undiscovered; say so</td></tr>
     </table>
-    <p class="muted" style="margin-top:14px">Then: an r/place-style public canvas, conference artifacts funded by the ticket, comments on any published page with no comment server, community playlists.</p>
+    <p class="reveal" style="margin-top:12px"><b class="ink">Agents and IPFS pin are the only bets with evidence today. Fund rung 1 for those two first.</b></p>
   </section>
 
-  <!-- 9 · TIER 3 -->
+  <!-- 9 -->
   <section class="slide">
-    <h2><span class="kicker">platform features after that</span>Economies inside the apps, at consumer scale</h2>
-    <div class="grid2">
-      <div class="card"><b>Payment hooks + a reference escrow</b><p class="muted">Entry fees, upgrades, bounties; apps that fund their own storage. The shipped payment rails support the composition; it needs a hardened reference contract.</p></div>
-      <div class="card"><b>Passkey sign-in</b><p class="muted">No wallet, no crypto knowledge. The access-rule design already anticipates WebAuthn/P-256 payloads; the gas cost needs measuring.</p></div>
-      <div class="card"><b>Batched multi-signer writes</b><p class="muted">Contract-enforced crowd actions cost about $0.011 each today because every action is its own transaction; batching cuts that to roughly $0.003 and lifts the throughput ceiling.</p></div>
-      <div class="card"><b>Payments for delegated agent keys</b><p class="muted">Today only the owner wallet can pay. Fixing this is what lets AI agents pay and get paid without a human in the loop.</p></div>
+    <div class="mini b1"></div>
+    <p class="kicker reveal">the ask</p>
+    <h2 class="reveal">Three investments, outcome first, with a demo date each.</h2>
+    <div class="ask">
+      <div class="card reveal"><div class="n">1</div><b>Builders can charge users</b><div class="feat">payment hooks + a reference escrow (filecoin-pay)</div><div class="gtm">frees the bearing; ship the hand-off-with-payment demo to an agent prospect</div></div>
+      <div class="card reveal"><div class="n">2</div><b>Strangers can join from a link</b><div class="feat">SDK access-rule path + reusable contracts + indexed reads</div><div class="gtm">unblocks the guestbook + canvas; demo on the live Filecoin Pin path</div></div>
+      <div class="card reveal"><div class="n">3</div><b>It runs at crowd scale</b><div class="feat">batched multi-signer writes + passkey sign-in</div><div class="gtm">turns the demos into products people can actually use</div></div>
     </div>
-    <p style="margin-top:12px">Each of these also upgrades every tier 1 and 2 example: the pet gains paid adoptions, the canvas gains event-scale crowds, the hand-off chain gains per-step escrow.</p>
+    <p class="sub reveal" style="margin-top:16px">Everything here is backed by running code or a cited figure. Ask for a live demo of any claim. Assumptions and per-figure sourcing: companion notes.</p>
   </section>
 
-  <!-- 10 · DESTINATIONS x GTM -->
-  <section class="slide">
-    <h2><span class="kicker">destinations, tagged to the bets we already made</span>Every destination lands on an existing GTM hypothesis</h2>
-    <table>
-      <tr><th>Destination</th><th>GTM bet / wedge</th><th>Blocked by</th></tr>
-      <tr><td>Signed multi-step hand-offs with receipts (human-in-the-loop review)</td><td>Agents bet; AI-governance + compliance wedges; the provenance validation the GTM plan names</td><td>SDK authorizer path; indexed reads</td></tr>
-      <tr><td>Viewer notes and saves on published pages</td><td>IPFS / Filecoin Pin bet ("the one place we have evidence of product-market fit")</td><td>sponsored writes; indexed reads; passkeys</td></tr>
-      <tr><td>Retention-locked records as a product</td><td>Compliance wedge; finance sell-through partners (H13)</td><td>retention-lock productization; willingness-to-pay unproven, needs a named vertical</td></tr>
-      <tr><td>Self-funding apps (pet, canvas, events)</td><td>No tracked bet: brand + payments-wedge demos. Demand undiscovered, and we say so</td><td>payment hooks; batching</td></tr>
-    </table>
-    <div class="footnote">Bets, wedges, and quoted lines: H2 GTM Strategy deck and the FOC GTM Hypothesis Tracker.</div>
-  </section>
-
-  <!-- 11 · ASSUMPTIONS -->
-  <section class="slide">
-    <h2><span class="kicker">what's given, what's computed, what's a guess</span>Assumptions behind every number</h2>
-    <table>
-      <tr><th>Figure</th><th>Status</th><th>Source</th></tr>
-      <tr><td>$21-40/mo settled; no new customer since Storacha; $1,320 cohort ARR</td><td class="good">given</td><td>Infura migration evaluation (2026-08-19)</td></tr>
-      <tr><td>$1K H1 target hit (852 USDFC); &gt;$15K H2; 5 power users at $500+/mo</td><td class="good">given</td><td>Pod Charter Q3 budget update</td></tr>
-      <tr><td>Write fees 53-69% of bills; add fee $0.002-0.003/piece</td><td class="good">given</td><td>Pricing Sensitivity sheet scenario model</td></tr>
-      <tr><td>$0.011 per contract-enforced action; $0.003 batched</td><td class="warn">computed</td><td>price list op fees; assumes one action per transaction vs 61-piece batches</td></tr>
-      <tr><td>$1,000 funds 1 TiB about 16 years</td><td class="warn">computed</td><td>$2.5/TiB/mo x 2 copies at current list; prices move</td></tr>
-      <tr><td>Moat verdicts</td><td class="warn">external review</td><td>three independent model reviews, 2026-09-02, prompted to allow "no moat"</td></tr>
-    </table>
-    <div class="footnote"><span class="good">Green</span> = read from the named source. <span class="warn">Amber</span> = computed or externally sourced; math in the companion notes.</div>
-  </section>
-
-  <!-- 12 · THE ASK -->
-  <section class="slide">
-    <h2><span class="kicker">the ask</span>Three investments, in order, and a working demo behind each claim</h2>
-    <div class="grid3">
-      <div class="card"><b>1. SDK path to access rules</b><p class="muted">Opens every tier 2 destination; ends bespoke-only building.</p></div>
-      <div class="card"><b>2. Indexed reads</b><p class="muted">Search, feeds, embeddable views; the events are already indexed, the SDK just cannot see them.</p></div>
-      <div class="card"><b>3. Payment hooks + batching</b><p class="muted">Gives builders revenue and crowd-scale costs; the two levers that unstick the first bearing.</p></div>
-    </div>
-    <p style="margin-top:18px">Everything in this deck is backed by running code or a cited source, and the probes that produced it cost testnet money and spare time. Ask for a live demo of any claim.</p>
-    <div class="footnote">Research trail: foc-collab repo, research/ directory (strategy, peer reviews, cluster reports, this deck's notes).</div>
-  </section>
-
-<div class="hud"><b id="cur">1</b> / <span id="total">1</span></div>
-<div class="nav"><button onclick="go(-1)">&larr; Prev</button><button onclick="go(1)">Next &rarr;</button></div>
-<div class="hint">&larr; &rarr; or Space to navigate &middot; F for fullscreen</div>
-
+</div>
+<div class="hud" id="hud">1 / 9</div>
+<div class="hint">&larr; &rarr; or space &middot; F fullscreen</div>
 <script>
-  const slides = Array.from(document.querySelectorAll('.slide'));
-  let i = 0;
-  document.getElementById('total').textContent = slides.length;
-  function render() {
-    slides.forEach((s, n) => s.classList.toggle('active', n === i));
-    document.getElementById('cur').textContent = i + 1;
-    document.getElementById('bar').style.width = ((i + 1) / slides.length * 100) + '%';
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var bar = document.getElementById('bar'), hud = document.getElementById('hud');
+  var i = 0;
+  function show(n, push) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function (s, k) {
+      s.classList.remove('active', 'prev');
+      if (k === i) s.classList.add('active');
+      else if (k < i) s.classList.add('prev');
+    });
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    hud.textContent = (i + 1) + ' / ' + slides.length;
+    if (push !== false) history.replaceState(null, '', '#' + (i + 1));
   }
-  function go(d) { i = Math.max(0, Math.min(slides.length - 1, i + d)); render(); }
-  document.addEventListener('keydown', e => {
+  function go(d) { show(i + d); }
+  document.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(1); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
-    else if (e.key === 'Home') { i = 0; render(); }
-    else if (e.key === 'End') { i = slides.length - 1; render(); }
-    else if (e.key.toLowerCase() === 'f') {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) { (document.documentElement.requestFullscreen || function(){})(); } else { document.exitFullscreen(); } }
   });
-  render();
+  var sx = null;
+  document.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) { if (sx === null) return; var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 45) go(dx < 0 ? 1 : -1); sx = null; }, { passive: true });
+  document.addEventListener('click', function (e) { if (e.target.closest('a')) return; var mid = window.innerWidth / 2; go(e.clientX < mid ? -1 : 1); });
+  var start = parseInt((location.hash || '').replace('#', ''), 10);
+  show(isFinite(start) && start >= 1 ? start - 1 : 0, false);
+})();
 </script>
 </body>
 </html>
