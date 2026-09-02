@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test games/tic-tac-toe/*.test.js",
+    "test": "node --test games/tic-tac-toe/*.test.js apps/corgi/*.test.js",
     "test:e2e": "node e2e/two-player.e2e.mjs"
   },
   "dependencies": {
