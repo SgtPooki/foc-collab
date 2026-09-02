@@ -166,8 +166,11 @@
       <div style="width:13%;background:var(--accent)">storage ~$50</div>
       <div style="width:2%;background:var(--dim)"></div>
     </div>
-    <p class="sub reveal" style="margin-top:6px">Writes ($0.003/piece + $0.008/call) dominate; storage is small; egress ($0.007/GB) is a sliver. <span class="dim">Piece-heavy SMB example at v1.4 rates; large-file workloads shift toward storage.</span></p>
-    <div class="revenue0 reveal">and native revenue = $0. There is no way to charge users on FOC.</div>
+    <p class="sub reveal" style="margin-top:6px">Writes ($0.003/piece + $0.008/call) dominate today; storage is small, egress ($0.007/GB) a sliver. <span class="dim">Piece-heavy SMB example at v1.4 rates; large-file workloads shift toward storage. Batching work (filecoin-pin #692, recent synapse-sdk changes) is already shrinking the per-write cost, so the size of the bill is not the durable problem.</span></p>
+    <div class="grid2 reveal" style="margin-top:12px">
+      <div class="card" style="border-color:var(--bad)"><b class="bad">The builder gets no cut</b>Every fee above flows to the network and the SP. The app that created the demand captures nothing, and has no native way to charge its users. Native revenue = $0.</div>
+      <div class="card" style="border-color:var(--warn)"><b class="warn">Awkward for SPs too</b>Per-piece, per-call pricing rewards odd packing and penalizes small writes, so the incentives are off on both sides of the deal, not just the builder's.</div>
+    </div>
     <div class="punch reveal"><span class="lead">A free app is a growing liability. A paid app must build its own custody, fiat onramp, and billing.</span>We decline to build that layer for the same reason a builder would: it is hard and legally heavy. That shared refusal is the jammed bearing.</div>
     <div class="foot reveal">Prices: filecoin-services v1.4 PriceListUSDFC.sol. Bill split recomputed from the pricing sheet's SMB scenario at v1.4 rates (see notes).</div>
   </section>
