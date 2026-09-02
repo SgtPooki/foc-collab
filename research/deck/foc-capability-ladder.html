@@ -117,14 +117,15 @@
   .loop { font:600 12.5px/1.4 var(--mono); color:var(--ink); margin:6px 0 4px; }
   .loop i { display:block; color:var(--dim); font-style:normal; font-size:11px; line-height:1.1; margin:1px 0; }
   .st2 { font-size:12.5px; color:var(--muted); margin:8px 0 0; }
-  .cyc { position:relative; width:100%; max-width:190px; aspect-ratio:1; margin:8px auto 2px; }
-  .cyc .cring { position:absolute; inset:20%; border-radius:50%; border:1.5px dashed var(--accent); opacity:.5; animation:fwspin 26s linear infinite; }
-  .cyc.ours .cring { border-color:var(--bad); animation:none; opacity:.7; }
-  .cyc .cc { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font:15px/1 var(--mono); color:var(--dim); }
-  .cyc.ours .cc { color:var(--bad); }
-  .cyc .cn { position:absolute; transform:translate(-50%,-50%); width:70px; text-align:center; font:600 9px/1.15 var(--sans); color:var(--ink); }
-  .cyc .cn.j { color:var(--bad); font-weight:800; }
-   (prefers-reduced-motion: reduce){ .cyc .cring{ animation:none; } }
+  .fwcard { display:flex; flex-direction:column; }
+  .fwcard .st2 { margin-top:auto; }
+  .wheel { width:118px; height:118px; display:block; margin:14px auto 14px; color:var(--accent); transform-origin:50% 50%; }
+  .wheel.spin { animation:fwspin 9s linear infinite; }
+  .wheel.jam { color:var(--bad); animation:shudder 2.6s ease-in-out infinite; }
+  @keyframes shudder { 0%,100%{transform:rotate(0)} 12%,32%{transform:rotate(5deg)} 22%,42%{transform:rotate(-5deg)} 52%{transform:rotate(0)} }
+  .steps { list-style:decimal; padding-left:22px; margin:0 0 4px; font:600 13px/1.6 var(--sans); color:var(--ink); }
+  .steps li.j { color:var(--bad); font-weight:800; }
+  @media (prefers-reduced-motion: reduce){ .wheel{ animation:none !important; } }
   @media (max-width: 820px) { .grid2, .grid3, .ask { grid-template-columns: 1fr; } .barcmp { grid-template-columns: 120px 1fr; } .mini { display: none; } }
 </style>
 </head>
@@ -191,18 +192,12 @@
   <section class="slide">
     <p class="kicker reveal">three flywheels, one dependency</p>
     <h2 class="reveal">Two flywheels already spin here. Both stall on a third nobody owns.</h2>
-    <div class="grid3" style="max-width:1080px">
-      <div class="card reveal"><b class="accent">Growth Flywheel</b><span class="who2">owned by GTM Growth Team</span>
-        <div class="cyc"><div class="cring"></div><div class="cc">&#8635;</div><div class="cn" style="left:50%;top:6%">communities</div><div class="cn" style="left:90%;top:38%">find builders</div><div class="cn" style="left:74%;top:88%">POCs</div><div class="cn" style="left:26%;top:88%">deployments</div><div class="cn" style="left:10%;top:38%">repeatable ICP</div></div>
-        <p class="st2">Runs today, but a converted builder can't sustain, so a repeatable paying ICP never closes.</p></div>
-      <div class="card reveal"><b class="accent2">FIL Network Flywheel</b><span class="who2">protocol cryptoeconomics</span>
-        <div class="cyc"><div class="cring"></div><div class="cc">&#8635;</div><div class="cn" style="left:50%;top:6%">paid usage</div><div class="cn" style="left:90%;top:38%">fees burned</div><div class="cn" style="left:74%;top:88%">FIL accrual</div><div class="cn" style="left:26%;top:88%">SP rewards</div><div class="cn" style="left:10%;top:38%">capacity</div></div>
-        <p class="st2">Needs real paid volume to matter. Today that volume is tiny.</p></div>
-      <div class="card reveal" style="border-color:var(--bad)"><b class="bad">Builder-Economics Flywheel</b><span class="who2">ours to own, unowned today</span>
-        <div class="cyc ours"><div class="cring"></div><div class="cc">&#8635;</div><div class="cn j" style="left:50%;top:6%">profitable builders</div><div class="cn" style="left:90%;top:38%">apps</div><div class="cn" style="left:74%;top:88%">users + ARR</div><div class="cn" style="left:26%;top:88%">SP supply</div><div class="cn" style="left:10%;top:38%">cheaper + better</div></div>
-        <p class="st2 bad">Jammed at step 1. The other two depend on this one turning.</p></div>
+    <div class="grid3" style="max-width:1080px;margin:0 auto">
+      <div class="card fwcard reveal"><b class="accent">Growth Flywheel</b><span class="who2">owned by GTM Growth Team</span><svg class="wheel spin" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="5"><circle cx="50" cy="50" r="34"/></g><g stroke="currentColor" stroke-width="3.5"><line x1="59.0" y1="50.0" x2="80.0" y2="50.0"/><line x1="54.5" y1="57.8" x2="65.0" y2="76.0"/><line x1="45.5" y1="57.8" x2="35.0" y2="76.0"/><line x1="41.0" y1="50.0" x2="20.0" y2="50.0"/><line x1="45.5" y1="42.2" x2="35.0" y2="24.0"/><line x1="54.5" y1="42.2" x2="65.0" y2="24.0"/></g><circle cx="50" cy="50" r="8" fill="currentColor"/><path d="M50 8 l7 6 l-7 6 z" fill="currentColor" stroke="none"/></svg><ol class="steps"><li>communities</li><li>find builders</li><li>discovery + POCs</li><li>deployments</li><li>repeatable ICP</li></ol><p class="st2">Runs today, but a converted builder can't sustain, so a repeatable paying ICP never closes.</p></div>
+      <div class="card fwcard reveal"><b class="accent2">FIL Network Flywheel</b><span class="who2">protocol cryptoeconomics</span><svg class="wheel spin" style="color:var(--accent2)" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="5"><circle cx="50" cy="50" r="34"/></g><g stroke="currentColor" stroke-width="3.5"><line x1="59.0" y1="50.0" x2="80.0" y2="50.0"/><line x1="54.5" y1="57.8" x2="65.0" y2="76.0"/><line x1="45.5" y1="57.8" x2="35.0" y2="76.0"/><line x1="41.0" y1="50.0" x2="20.0" y2="50.0"/><line x1="45.5" y1="42.2" x2="35.0" y2="24.0"/><line x1="54.5" y1="42.2" x2="65.0" y2="24.0"/></g><circle cx="50" cy="50" r="8" fill="currentColor"/><path d="M50 8 l7 6 l-7 6 z" fill="currentColor" stroke="none"/></svg><ol class="steps"><li>paid usage</li><li>fees burned in FIL</li><li>FIL value accrual</li><li>SP rewards</li><li>more capacity</li></ol><p class="st2">Needs real paid volume to matter. Today that volume is tiny.</p></div>
+      <div class="card fwcard reveal" style="border-color:var(--bad)"><b class="bad">Builder-Economics Flywheel</b><span class="who2">ours to own, unowned today</span><svg class="wheel jam" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="5"><circle cx="50" cy="50" r="34"/></g><g stroke="currentColor" stroke-width="3.5"><line x1="59.0" y1="50.0" x2="80.0" y2="50.0"/><line x1="54.5" y1="57.8" x2="65.0" y2="76.0"/><line x1="45.5" y1="57.8" x2="35.0" y2="76.0"/><line x1="41.0" y1="50.0" x2="20.0" y2="50.0"/><line x1="45.5" y1="42.2" x2="35.0" y2="24.0"/><line x1="54.5" y1="42.2" x2="65.0" y2="24.0"/></g><circle cx="50" cy="50" r="8" fill="currentColor"/><g stroke="var(--bad)" stroke-width="7" stroke-linecap="round"><line x1="41" y1="7" x2="59" y2="23"/><line x1="59" y1="7" x2="41" y2="23"/></g></svg><ol class="steps"><li class="j">profitable builders</li><li>apps</li><li>users + ARR</li><li>SP supply</li><li>cheaper + better</li></ol><p class="st2 bad">Jammed at step 1. The other two depend on this one turning.</p></div>
     </div>
-    <div class="punch reveal" style="font-size:clamp(17px,2vw,26px);margin-top:14px"><span class="lead">Our approach: own this loop and free step 1.</span>Let builders charge (payments), let strangers contribute (open participation), make it cheap at scale (batching).</div>
+    <div class="punch reveal" style="font-size:clamp(17px,2vw,26px);margin:5vh auto 0;max-width:900px"><span class="lead">Our approach: own this loop and free step 1.</span>Let builders charge (payments), let strangers contribute (open participation), make it cheap at scale (batching).</div>
     <div class="foot reveal">FIL network flywheel shown at a high level (fees paid in FIL are burned; see the FIL value-accrual notes). Growth Flywheel steps from the FOC Growth Team charter.</div>
   </section>
 
@@ -293,7 +288,7 @@
     <h2 class="reveal">Three investments, outcome first, with a demo date each.</h2>
     <div class="ask">
       <div class="card reveal"><div class="n">1</div><b>Builders can charge users</b><div class="feat">payment hooks + a reference escrow (filecoin-pay)</div><div class="gtm">frees the bearing; ship the hand-off-with-payment demo to an agent prospect</div></div>
-      <div class="card reveal"><div class="n">2</div><b>Strangers can join from a link</b><div class="feat">SDK access-rule path + reusable contracts + indexed reads</div><div class="gtm">unblocks the guestbook + canvas; demo on the live Filecoin Pin path</div></div>
+      <div class="card reveal"><div class="n">2</div><b>Strangers can join from a link</b><div class="feat">SDK access-rule path + reusable contracts + indexed reads</div><div class="gtm">unblocks open-contribution apps like viewer notes on a published page; demo on the live Filecoin Pin path</div></div>
       <div class="card reveal"><div class="n">3</div><b>It runs at crowd scale</b><div class="feat">batched multi-signer writes + passkey sign-in</div><div class="gtm">turns the demos into products people can actually use</div></div>
     </div>
     <div class="card reveal" style="margin-top:16px;border-color:var(--good)"><b class="good">Demand is already here: Refound</b>Active design partner (formerly Lightshift), ~300 users waiting per their team. The write-ACL work unblocked their access control; their remaining blocker is sponsoring users' storage without holding custody, which is investment 1. They built a custom drip-rail workaround in the meantime.</div>
