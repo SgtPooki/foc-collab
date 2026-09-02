@@ -59,3 +59,42 @@ states the concrete SMB example rather than an "every tier" claim.
 Moat attribution corrected: cross-checked with Codex/Cursor/Gemini and
 verified against each named product; NOT described as human third-party
 review.
+
+
+## Scope correction (2026-09-02): the $22/mo figure
+
+The ~$22/mo (Aug 2026, and $21-40 across Jun-Aug) is the FILECOIN WARM
+STORAGE SERVICE (FWSS = FOC's warm-storage service) total settled
+revenue network-wide, from the Infura migration evaluation, NOT a
+"pod"-scoped number. Deck slide 2 labels it "FOC settled / mo". Distinct
+from the pod's own goals (H1 $1K ARR target hit at 852 USDFC; H2 >$15K
+settled) and from the network's $20M ARR goal. Do not relabel any of the
+three as another's scope. Note the 852 USDFC (reported ARR/transacted)
+and the ~$22/mo settled run-rate are different measures from different
+dates/sources; both are shown as-is rather than conflated.
+
+## Revenue figures corrected to live Filecoin Pay data (2026-09-02)
+
+Source: pay.filecoin.cloud/mainnet + FOC observer (query_sql, fp_* tables),
+2026-09-02. The Pod Charter names pay.filecoin.cloud/mainnet as THE ARR
+metric; the deck now uses it instead of the FWSS-only $21-40/mo figure.
+
+Settled revenue (recognized to providers, all rails, USDFC-equiv):
+- Monthly: Jan $26, Feb $27, Mar $71, Apr $23, May $30, Jun $25,
+  Jul $177, Aug $664, Sep (2 days) $277.
+- Cumulative all-time: ~$1,320. Last 30 days: ~$663.
+- August ($664) is a real ramp vs Jun ($25) but early and lumpy; do not
+  annualize the peak as run-rate.
+Gross transacted (deposit flow, NOT revenue): ~$54K stablecoin
+(51.4K axlUSDC + 2.81K USDFC per dashboard). Locked: 2.57K axlUSDC +
+2.73K USDFC. Network revenue burned: 64 FIL (dashboard) / ~6.6 in token
+fees (0.5% of settled).
+Accounts/rails: 159 distinct payer wallets, ~210 accounts total
+(incl. payees), 1,535 active rails (2,636 created all-time).
+New payer wallets per month: Nov'25 60 (launch), then 7,6,1,16,9,25,17,
+10,7,1 — so NOT zero new wallets. The "no new customer since Storacha"
+claim is GTM-scoped (no new QUALIFIED customer / power user), not literal
+zero on-chain. Deck states it precisely: August jump is existing
+customers settling more, self-serve wallets trickle in, no new qualified
+logo. The FWSS-only "$21-40/mo" from the Infura doc was a subset; total
+Filecoin Pay settled is higher and ramping.

@@ -70,6 +70,8 @@
   .costbar { display: flex; height: 74px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); max-width: 1000px; margin: 6px 0 4px; }
   .costbar div { display: flex; align-items: center; justify-content: center; font: 700 13px/1.2 var(--mono); text-align: center; padding: 0 6px; color: #08101f; }
   .revenue0 { max-width: 1000px; margin-top: 12px; border: 1px dashed var(--bad); border-radius: 10px; padding: 10px 14px; color: var(--bad); font-weight: 700; }
+  .punch { max-width: 1050px; margin: 16px 0 4px; font: 800 clamp(20px,2.5vw,34px)/1.18 var(--sans); letter-spacing: -.02em; color: var(--ink); border-left: 4px solid var(--bad); padding-left: 20px; }
+  .punch .lead { color: var(--muted); font-weight: 600; font-size: .72em; display:block; margin-bottom: 8px; letter-spacing: 0; }
 
   /* flywheel */
   .fw { position: relative; width: min(62vh, 60vw); aspect-ratio: 1; margin: 4px auto 0; }
@@ -129,17 +131,29 @@
   <!-- 2 -->
   <section class="slide">
     <p class="kicker reveal">where we are</p>
-    <h2 class="reveal">Twelve months in, settled revenue is a rounding error.</h2>
-    <div class="scale">
-      <div class="reveal"><span class="now">$22<span style="font-size:.35em;color:var(--muted)">/mo</span></span></div>
-      <div class="barcmp reveal">
-        <div class="lbl">pod settled today</div><div class="track"><div class="fill" style="width:1.2%;background:var(--warn)"></div><div class="val warn" style="right:auto;left:14px">~$22/mo</div></div>
-        <div class="lbl">pod H2 goal</div><div class="track"><div class="fill" style="width:9%;background:var(--accent)"></div><div class="val accent">&gt;$15K settled by EO2026</div></div>
-        <div class="lbl">network goal FilOz feeds</div><div class="track"><div class="fill" style="width:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div><div class="val" style="color:#08101f">$20M ARR · 20 brands</div></div>
+    <h2 class="reveal">Revenue just started moving. It's still a rounding error.</h2>
+    <div class="grid2" style="max-width:1050px">
+      <div class="reveal">
+        <p class="sub" style="margin:0 0 8px">Filecoin Pay settled revenue, per month:</p>
+        <div class="barcmp" style="grid-template-columns:70px 1fr">
+          <div class="lbl">Jun</div><div class="track"><div class="fill" style="width:4%;background:var(--dim)"></div><div class="val dim" style="right:auto;left:10px">$25</div></div>
+          <div class="lbl">Jul</div><div class="track"><div class="fill" style="width:27%;background:var(--accent)"></div><div class="val accent">$177</div></div>
+          <div class="lbl warn" style="color:var(--warn)">Aug</div><div class="track" style="height:34px"><div class="fill" style="width:100%;background:linear-gradient(90deg,var(--warn),#ff7a3c)"></div><div class="val" style="color:#08101f">$664</div></div>
+        </div>
+        <p class="dim" style="font-size:13px;margin-top:8px">~$1,320 settled all-time. Ramp is real but early and lumpy.</p>
+      </div>
+      <div class="reveal">
+        <p class="sub" style="margin:0 0 8px">Against the goals it feeds:</p>
+        <div class="barcmp" style="grid-template-columns:110px 1fr">
+          <div class="lbl">Aug settled</div><div class="track"><div class="fill" style="width:3.3%;background:var(--warn)"></div><div class="val warn" style="right:auto;left:10px">$664</div></div>
+          <div class="lbl">pod H2 goal</div><div class="track"><div class="fill" style="width:9%;background:var(--accent)"></div><div class="val accent">&gt;$15K by EO2026</div></div>
+          <div class="lbl">network goal</div><div class="track"><div class="fill" style="width:100%;background:linear-gradient(90deg,var(--accent),var(--accent2))"></div><div class="val" style="color:#08101f">$20M ARR</div></div>
+        </div>
+        <p class="dim" style="font-size:13px;margin-top:8px">Bars are log-ish for legibility; the gap is real.</p>
       </div>
     </div>
-    <p class="sub reveal" style="margin-top:16px">The H1 target ($1K ARR) was hit, at 852 USDFC. But there has been <b class="ink">no new customer since the Storacha cohort</b>, and the largest live deal on the table is ~$105/mo. Bars are log-ish for legibility; the gap is real.</p>
-    <div class="foot reveal">Pod-settled and "no new customer": Infura migration evaluation, 2026-08-19. Goals: Pod Charter Q3 update (pod) and H2 GTM deck ($20M is the network goal FilOz contributes to, not a pod number).</div>
+    <p class="reveal" style="margin-top:16px">159 paying wallets, ~$54K of stablecoin has moved through the rails, 64 FIL burned as network revenue. But the August jump is <b class="ink">the same customers settling more, not new ones</b>: small self-serve wallets trickle in, and GTM reports no new qualified customer since the Storacha cohort.</p>
+    <div class="foot reveal">Source: pay.filecoin.cloud/mainnet and the FOC observer, 2026-09-02. Settled = recognized revenue to providers; the ~$54K "transacted" is gross deposit flow, not revenue. $20M is the network goal FilOz contributes to, not a pod number.</div>
   </section>
 
   <!-- 3 -->
@@ -154,7 +168,7 @@
     </div>
     <p class="sub reveal" style="margin-top:6px">Writes ($0.003/piece + $0.008/call) dominate; storage is small; egress ($0.007/GB) is a sliver. <span class="dim">Piece-heavy SMB example at v1.4 rates; large-file workloads shift toward storage.</span></p>
     <div class="revenue0 reveal">and native revenue = $0. There is no way to charge users on FOC.</div>
-    <p class="reveal" style="margin-top:14px">A free app is a growing liability. A paid app must build its own custody, fiat onramp, and billing. <b class="ink">We decline to build that layer for the same reason a builder would: it is hard and legally heavy. That shared refusal is the jammed bearing.</b></p>
+    <div class="punch reveal"><span class="lead">A free app is a growing liability. A paid app must build its own custody, fiat onramp, and billing.</span>We decline to build that layer for the same reason a builder would: it is hard and legally heavy. That shared refusal is the jammed bearing.</div>
     <div class="foot reveal">Prices: filecoin-services v1.4 PriceListUSDFC.sol. Bill split recomputed from the pricing sheet's SMB scenario at v1.4 rates (see notes).</div>
   </section>
 
