@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test games/tic-tac-toe/*.test.js apps/corgi/*.test.js",
-    "test:e2e": "node e2e/two-player.e2e.mjs"
+    "test:e2e": "node e2e/two-player.e2e.mjs",
+    "test:e2e:corgi": "node apps/corgi/e2e.mjs"
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.8.1",
