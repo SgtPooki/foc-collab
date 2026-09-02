@@ -15,13 +15,15 @@
  *                  synapse-core/src/pay/resolve-account-state.ts
  *     funds        total funds in the account (grossCoverage = funds / rate)
  *   deposits: [{ from, amount, epoch, txHash }] in chain order
+ *   withdrawals: [{ amount, epoch, txHash }] in chain order (the payer
+ *     taking funds back out; only the payer can, FilecoinPayV1.withdraw)
  *
  * Runway history is reconstructed backwards from `unreserved`: between two
- * deposits it declines by exactly ratePerEpoch per epoch, a deposit adds its
- * amount, and nothing else moves it (settlement only shifts funds into the
- * reserve). That holds as long as the spend rate is constant, which is true
- * for a dedicated payer wallet with one data set; withdrawals and rate
- * changes are not modelled in v1 and are documented in README.md.
+ * events it declines by exactly ratePerEpoch per epoch, a deposit adds its
+ * amount, a withdrawal removes it, and nothing else moves it (settlement
+ * only shifts funds into the reserve). That holds as long as the spend rate
+ * is constant, which is true for a dedicated payer wallet with one data
+ * set; rate changes are not modelled in v1 and are documented in README.md.
  */
 
 export const EPOCHS_PER_DAY = 2880 // synapse-core/src/utils/constants.ts:18
@@ -78,23 +80,38 @@ function validDeposit(d) {
     && Number.isFinite(d.epoch)
 }
 
+function validWithdrawal(w) {
+  return w != null && typeof w === 'object'
+    && typeof w.amount === 'bigint' && w.amount > 0n
+    && Number.isFinite(w.epoch)
+}
+
+/** Deposits and withdrawals merged in chain order, withdrawals as negative deltas. */
+function events(deposits, withdrawals) {
+  const all = [
+    ...deposits.map((d) => ({ ...d, kind: 'deposit', delta: d.amount })),
+    ...withdrawals.map((w) => ({ ...w, kind: 'withdrawal', delta: -w.amount })),
+  ]
+  return all.sort((a, b) => a.epoch - b.epoch || (a.logIndex ?? 0) - (b.logIndex ?? 0))
+}
+
 /**
- * Walks the deposit log backwards to find the unreserved balance just
- * before and just after every deposit. Returns one row per deposit plus the
- * balance trajectory, all in chain order.
+ * Walks the event log backwards to find the unreserved balance just before
+ * and just after every deposit or withdrawal. Returns one row per event in
+ * chain order.
  */
-function trajectory(account, deposits) {
+function trajectory(account, evs) {
   const rate = toBig(account.ratePerEpoch)
-  const rows = new Array(deposits.length)
+  const rows = new Array(evs.length)
   let after = toBig(account.unreserved) + rate * toBig(account.epoch)
-  // `after` is balance + rate*epoch, which is constant between deposits, so
+  // `after` is balance + rate*epoch, which is constant between events, so
   // we can walk backwards without tracking elapsed time per segment.
-  for (let i = deposits.length - 1; i >= 0; i--) {
-    const d = deposits[i]
-    const afterAt = after - rate * toBig(d.epoch)
-    const beforeAt = afterAt - d.amount
-    rows[i] = { ...d, before: beforeAt, after: afterAt }
-    after -= d.amount
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const e = evs[i]
+    const afterAt = after - rate * toBig(e.epoch)
+    const beforeAt = afterAt - e.delta
+    rows[i] = { ...e, before: beforeAt, after: afterAt }
+    after -= e.delta
   }
   return rows
 }
@@ -118,16 +135,24 @@ function generationsOf(account, rows, config) {
   }
   for (const row of rows) {
     if (!alive) {
-      if (rate > 0n && row.after >= deathLine) {
+      if (rate > 0n && row.kind === 'deposit' && row.after >= deathLine) {
         alive = true
         born = { epoch: row.epoch, txHash: row.txHash, by: row.from }
       }
       continue
     }
     if (rate > 0n && row.before < deathLine) {
-      generations.push({ born, died: { epoch: crossingEpoch(row.epoch, row.before), atDeposit: false } })
-      alive = row.after >= deathLine
+      // starved to death between events
+      generations.push({ born, died: { epoch: crossingEpoch(row.epoch, row.before), cause: 'starved' } })
+      alive = row.kind === 'deposit' && row.after >= deathLine
       born = alive ? { epoch: row.epoch, txHash: row.txHash, by: row.from } : null
+      continue
+    }
+    if (rate > 0n && row.kind === 'withdrawal' && row.after < deathLine) {
+      // the owner pulled the food out from under it
+      generations.push({ born, died: { epoch: row.epoch, cause: 'withdrawn' } })
+      alive = false
+      born = null
     }
   }
   const now = account.epoch
@@ -135,7 +160,7 @@ function generationsOf(account, rows, config) {
     const last = rows[rows.length - 1]
     const nowBalance = toBig(account.unreserved)
     if (rate > 0n && nowBalance < deathLine) {
-      generations.push({ born, died: { epoch: crossingEpoch(last.epoch, last.after), atDeposit: false } })
+      generations.push({ born, died: { epoch: crossingEpoch(last.epoch, last.after), cause: 'starved' } })
       alive = false
       born = null
     }
@@ -145,13 +170,14 @@ function generationsOf(account, rows, config) {
 
 function distinctFeedersSince(rows, sinceEpoch) {
   const set = new Set()
-  for (const r of rows) if (r.epoch >= sinceEpoch) set.add(r.from.toLowerCase())
+  for (const r of rows) if (r.kind === 'deposit' && r.epoch >= sinceEpoch) set.add(r.from.toLowerCase())
   return set
 }
 
 function parkOf(rows, config, payer) {
   const owners = new Map()
   for (const r of rows) {
+    if (r.kind !== 'deposit') continue
     const owner = r.from.toLowerCase()
     if (owner === payer) continue
     if (r.amount < config.adoptionThreshold || owners.has(owner)) continue
@@ -170,7 +196,8 @@ export function fold(input, config = DEFAULT_CONFIG) {
   }
   const payer = String(input.payer ?? '').toLowerCase()
   const deposits = (input.deposits ?? []).filter(validDeposit)
-  const rows = trajectory(account, deposits)
+  const withdrawals = (input.withdrawals ?? []).filter(validWithdrawal)
+  const rows = trajectory(account, events(deposits, withdrawals))
   const runway = runwayEpochs(account.unreserved, account.ratePerEpoch)
   const gross = runwayEpochs(account.funds, account.ratePerEpoch)
   const { generations, alive, born, deathLine } = generationsOf(account, rows, config)
@@ -209,7 +236,8 @@ export function fold(input, config = DEFAULT_CONFIG) {
     memorial,
     park,
     feed: rows.slice().reverse(),
-    totalFed: rows.reduce((sum, r) => sum + r.amount, 0n),
-    ignored: (input.deposits ?? []).length - deposits.length,
+    totalFed: rows.reduce((sum, r) => (r.kind === 'deposit' ? sum + r.amount : sum), 0n),
+    totalWithdrawn: rows.reduce((sum, r) => (r.kind === 'withdrawal' ? sum + r.amount : sum), 0n),
+    ignored: (input.deposits ?? []).length - deposits.length + (input.withdrawals ?? []).length - withdrawals.length,
   }
 }

@@ -174,8 +174,12 @@ function renderFeedLog(s, clock) {
     return
   }
   $('feed-log').innerHTML = s.feed.slice(0, 200).map((f) => {
+    const when = `<td title="epoch ${f.epoch}">${ago(clock, f.epoch)}<br><span class="small muted">${fmtDate(clock, f.epoch)}</span></td>`
+    if (f.kind === 'withdrawal') {
+      return `<tr>${when}<td>${addrLink(s.payer)} <span class="badge">withdrew</span></td><td class="num">-${usd(f.amount, 4)}</td><td>${txLink(f.txHash)}</td></tr>`
+    }
     const adopt = f.amount >= foldConfig.adoptionThreshold && f.from.toLowerCase() !== s.payer ? ' <span class="badge">adopt</span>' : ''
-    return `<tr><td title="epoch ${f.epoch}">${ago(clock, f.epoch)}<br><span class="small muted">${fmtDate(clock, f.epoch)}</span></td><td>${addrLink(f.from)}${adopt}</td><td class="num">${usd(f.amount, 4)}</td><td>${txLink(f.txHash)}</td></tr>`
+    return `<tr>${when}<td>${addrLink(f.from)}${adopt}</td><td class="num">${usd(f.amount, 4)}</td><td>${txLink(f.txHash)}</td></tr>`
   }).join('')
 }
 
@@ -184,7 +188,8 @@ function renderWall(s, clock) {
     $('wall').innerHTML = '<p class="empty">No corgi has died yet. When one does, its final state is recorded here, folded from the same deposit log as everything else.</p>'
     return
   }
-  $('wall').innerHTML = s.generations.map((g, i) => `<article>${corgiSvg(`${s.payer}${i}`, { life: 'dead', title: `generation ${i + 1}` })}<div><p><strong>Generation ${i + 1}</strong></p><p class="small muted">Born ${fmtDate(clock, g.born.epoch)} by ${addrLink(g.born.by)}. Died ${fmtDate(clock, g.died.epoch)} when runway fell under ${foldConfig.deathDays} days.</p></div></article>`).join('')
+  const cause = (g) => (g.died.cause === 'withdrawn' ? 'when its owner withdrew funds and runway fell under' : 'when runway ran down under')
+  $('wall').innerHTML = s.generations.map((g, i) => `<article>${corgiSvg(`${s.payer}${i}`, { life: 'dead', title: `generation ${i + 1}` })}<div><p><strong>Generation ${i + 1}</strong></p><p class="small muted">Born ${fmtDate(clock, g.born.epoch)} by ${addrLink(g.born.by)}. Died ${fmtDate(clock, g.died.epoch)} ${cause(g)} ${foldConfig.deathDays} days.</p></div></article>`).join('')
 }
 
 function render(v) {
@@ -217,7 +222,7 @@ async function load({ quiet = false } = {}) {
         if (!quiet) banner(`Scanning deposit events: ${Math.round((scanned / total) * 100)}% of ${total.toLocaleString()} blocks.`, { progress: (scanned / total) * 100 })
       },
     })
-    const state = fold({ payer: read.payer, account: read.account, deposits: read.deposits }, foldConfig)
+    const state = fold({ payer: read.payer, account: read.account, deposits: read.deposits, withdrawals: read.withdrawals }, foldConfig)
     view = { state, clock: read.clock, account: read.account }
     render(view)
     hideBanner()

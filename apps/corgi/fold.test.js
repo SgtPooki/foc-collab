@@ -166,6 +166,37 @@ test('feed log is newest first with attributed amounts; junk deposits are counte
   assert.equal(s.ignored, 2)
 })
 
+test('a withdrawal that drops runway under the death line kills the corgi at that epoch', () => {
+  const now = 100_000
+  const t0 = now - 10 * EPOCHS_PER_DAY
+  const s = fold({
+    payer: PAYER,
+    account: account(3, now),
+    deposits: [dep(A, days(100), t0)],
+    // 100 - 10 (spent) - 87 = 3 days left, withdrawn 2 days ago
+    withdrawals: [{ amount: days(87), epoch: now - 2 * EPOCHS_PER_DAY, txHash: '0xw' }],
+  })
+  assert.equal(s.life, 'dead')
+  assert.equal(s.generations.length, 1)
+  assert.deepEqual(s.generations[0].died, { epoch: now - 2 * EPOCHS_PER_DAY, cause: 'withdrawn' })
+  assert.equal(s.totalWithdrawn, days(87))
+  assert.equal(s.feed[0].kind, 'withdrawal')
+  assert.equal(s.distinctFeeders, 0) // withdrawals are not feeding
+})
+
+test('a withdrawal that leaves runway above the line is just a smaller meal', () => {
+  const now = 100_000
+  const s = fold({
+    payer: PAYER,
+    account: account(50, now),
+    deposits: [dep(A, days(100), now - 10 * EPOCHS_PER_DAY)],
+    withdrawals: [{ amount: days(40), epoch: now - 5 * EPOCHS_PER_DAY, txHash: '0xw' }],
+  })
+  assert.equal(s.life, 'fine')
+  assert.equal(s.generations.length, 0)
+  assert.equal(s.generation, 1)
+})
+
 test('fold is deterministic and does not mutate its input', () => {
   const now = 100_000
   const input = { payer: PAYER, account: account(30, now), deposits: [dep(A, days(40), now - 300), dep(D, USDFC, now - 1), dep(E, USDFC, now - 1)] }

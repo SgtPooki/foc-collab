@@ -25,6 +25,10 @@ export const EPOCH_SECONDS = 30
 export const DEPOSIT_EVENT = sdk.parseAbiItem(
   'event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
 )
+// withdraw() emits from = msg.sender = the payer (FilecoinPayV1.sol WithdrawRecorded)
+export const WITHDRAW_EVENT = sdk.parseAbiItem(
+  'event WithdrawRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
+)
 
 const LOG_CHUNK = 10_000 // Glif calibration accepts 10k, rejects 50k (probed 2026-09-02)
 const REORG_MARGIN = 120 // rescan this many recent blocks on every load
@@ -62,7 +66,7 @@ export async function readAccount(client, { payer, token }) {
 }
 
 function cacheKey(chain, payer) {
-  return `corgi:deposits:${chain.id}:${payer.toLowerCase()}`
+  return `corgi:log:v2:${chain.id}:${payer.toLowerCase()}`
 }
 
 function revive(entry) {
@@ -74,18 +78,16 @@ function loadCache(storage, key) {
     const raw = storage?.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    return { toBlock: Number(parsed.toBlock), deposits: parsed.deposits.map(revive) }
+    return { toBlock: Number(parsed.toBlock), deposits: parsed.deposits.map(revive), withdrawals: (parsed.withdrawals ?? []).map(revive) }
   } catch {
     return null
   }
 }
 
-function saveCache(storage, key, toBlock, deposits) {
+function saveCache(storage, key, toBlock, deposits, withdrawals) {
   try {
-    storage?.setItem(key, JSON.stringify({
-      toBlock: Number(toBlock),
-      deposits: deposits.map((d) => ({ ...d, amount: d.amount.toString() })),
-    }))
+    const plain = (list) => list.map((d) => ({ ...d, amount: d.amount.toString() }))
+    storage?.setItem(key, JSON.stringify({ toBlock: Number(toBlock), deposits: plain(deposits), withdrawals: plain(withdrawals) }))
   } catch {
     // storage full or unavailable: the next load simply rescans
   }
@@ -124,33 +126,39 @@ async function getLogsChunked(client, args, from, to, onProgress) {
   return out
 }
 
+function toEntry(l) {
+  return { from: l.args.from, to: l.args.to, amount: l.args.amount, epoch: Number(l.blockNumber), logIndex: Number(l.logIndex), txHash: l.transactionHash }
+}
+
 /**
- * Attributed deposit log for the payer, oldest first. `fromBlock` bounds the
- * first full scan; later loads resume from the cached position.
+ * Attributed deposit log (to = payer) and the payer's withdrawals (from =
+ * payer), oldest first. `fromBlock` bounds the first full scan; later loads
+ * resume from the cached position. Both scans run in parallel and report
+ * combined progress.
  */
 export async function readDeposits(client, { chain, payer, token, fromBlock }, { storage, onProgress } = {}) {
   const head = Number(await client.getBlockNumber({ cacheTime: 0 }))
   const key = cacheKey(chain, payer)
   const cached = loadCache(storage, key)
   const start = cached ? Math.max(fromBlock, cached.toBlock - REORG_MARGIN) : fromBlock
-  const keep = cached ? cached.deposits.filter((d) => d.epoch < start) : []
+  const keepD = cached ? cached.deposits.filter((d) => d.epoch < start) : []
+  const keepW = cached ? cached.withdrawals.filter((d) => d.epoch < start) : []
 
-  const logs = await getLogsChunked(client, {
-    address: chain.contracts.filecoinPay.address,
-    event: DEPOSIT_EVENT,
-    args: { token, to: payer },
-  }, start, head, onProgress)
+  const progress = [0, 0]
+  const report = (i) => ({ scanned, total }) => {
+    progress[i] = scanned
+    onProgress?.({ scanned: progress[0] + progress[1], total: total * 2 })
+  }
+  const address = chain.contracts.filecoinPay.address
+  const [dLogs, wLogs] = await Promise.all([
+    getLogsChunked(client, { address, event: DEPOSIT_EVENT, args: { token, to: payer } }, start, head, report(0)),
+    getLogsChunked(client, { address, event: WITHDRAW_EVENT, args: { token, from: payer } }, start, head, report(1)),
+  ])
 
-  const fresh = logs.map((l) => ({
-    from: l.args.from,
-    amount: l.args.amount,
-    epoch: Number(l.blockNumber),
-    logIndex: Number(l.logIndex),
-    txHash: l.transactionHash,
-  }))
-  const deposits = sortDeposits(dedupe([...keep, ...fresh]))
-  saveCache(storage, key, head, deposits)
-  return { deposits, head }
+  const deposits = sortDeposits(dedupe([...keepD, ...dLogs.map(toEntry)]))
+  const withdrawals = sortDeposits(dedupe([...keepW, ...wLogs.map(toEntry)]))
+  saveCache(storage, key, head, deposits, withdrawals)
+  return { deposits, withdrawals, head }
 }
 
 /** Seconds since the Unix epoch for a block height, extrapolated from the head block. */
@@ -171,7 +179,7 @@ export async function readCorgi(client, config, opts = {}) {
     readDeposits(client, { chain, payer, token, fromBlock: Number(config.fromBlock ?? 0) }, opts),
     epochClock(client),
   ])
-  return { payer, account, deposits: log.deposits, head: log.head, clock, token }
+  return { payer, account, deposits: log.deposits, withdrawals: log.withdrawals, head: log.head, clock, token }
 }
 
 // ---------------------------------------------------------------- wallet
