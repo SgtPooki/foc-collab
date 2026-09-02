@@ -114,3 +114,60 @@ the "Markets" deck (available if unit-economics slides need more depth).
   Tag honestly as "demand undiscovered".
 - Crowd canvases/events -> Brand wedge (awareness campaign fodder),
   not a revenue bet.
+
+## Addendum (same day): pod targets, pricing sheet, encryption envelope
+
+**FilOz/FOC pod's own revenue targets (NOT the network's $20M):**
+From the Pod Charter doc (contains the funding request + Q2 check-in +
+Q3 budget update):
+- H1'26: $1K ARR target — ACHIEVED (852 USDFC ARR reported in Q1
+  accomplishments); plus "4 onramps with collectively $1M ARR making
+  paid onchain deals with FOC".
+- H2'26 (Q3 budget update topline): >$15K paid/settled via FOC before
+  EO2026 (doc types "EO2025"; reporting period is Q3 2026), from ~$1K
+  transacted as of EOQ2. Plus 5 recurring power users at $500+/mo x 2
+  months (confirms $500, resolving the deck's $50/$500 inconsistency),
+  >20 active mainnet SPs meeting repair/replication SLAs, and — notable
+  for our research — "Support for user private data (ACLs &
+  encryption)" as a named H2 operational-readiness goal.
+- NOT FOUND: a $500K or $2M ARR commitment from the June NYC trip. The
+  $500K figure that does appear is the Q1 POD BUDGET allocation ("of
+  ~$500K allocated"), and $1M appears only as the 4-onramps collective
+  line. Flag to Russell rather than guess; the FDS-8 Secondary Planning
+  doc and "FilOz 2026H2 Planning" gdoc remain unread candidates.
+
+**Pricing Sensitivity sheet (proposed price list + scenario model):**
+- Proposed prices: dataset creation $0.00112; proving floor $0.024/
+  dataset/mo; storage $2.50/TiB/mo/copy (default 2x = $5 headline; the
+  scenario lever tests $0.50/copy); addPieces $0.002/op (batch capped at
+  61 by ExaData); egress up to $0.014/GB; deletion $0.002.
+- THE finding: in the sheet's own scenario model, per-piece ADD FEES are
+  53-69% of the monthly bill at every tier (hobbyist $0.37/mo through
+  enterprise $19K/mo; effective $19-37/TiB/mo all-in), with egress
+  another 24-37%. Storage itself is a minority of the bill. Direct
+  internal corroboration for the builder-P&L thesis and the batching
+  ask (its "Per Add Piece" row even names the spam-defense rationale
+  and the SP batching disincentive).
+
+**NYC colo doc extras:**
+- The wedge backlog literally contains our thesis: "DApps: work with
+  'heavy' files 'without a server'" (linking curiostorage filstream),
+  plus verifiable attestations/compliance wedges.
+- Agent-storage ICP already has named customer examples: Atomic Memory,
+  Phala Network, AethirClaw; plus the Storacha-migration use-case
+  buckets show real demand for private/encrypted storage and advanced
+  access control.
+- "Service Sponsorship (fund an existing rail by a 3rd party)" already
+  has a product-research page (Sponsor a rail / fund a specific
+  dataset) — prior art for the corgi's fund-a-specific-dataset
+  question; link from Notion: Product research: Sponsor a rail.
+
+**Encryption envelope for the internal deck:**
+FEE (Filecoin Encryption Envelope), FIPs discussion #1253. Go impl:
+filecoin-project/go-fee; the wire-format source of truth is Kuba's
+TypeScript reference implementation Kubuxu/foc-encryption-demo
+("foc-encryption"). Chunked AES-256-GCM (STREAM), CEK wrappable via
+ECDH-ES+A256KW (X25519) or A256KW pre-shared key — the pre-shared-key
+path is the password route (KDF -> A256KW). Plan: publish the deck FEE-
+encrypted to FOC with a small self-contained viewer page that decrypts
+in-browser with the password; internal content never sits public.
