@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FOC Capability Ladder</title>
+<!--
+  Single-file slide deck template. Self-contained: inline CSS + JS, no external resources
+  (so it renders offline and from IPFS). Each slide is one <section class="slide">.
+  Keyboard: arrows / space / PageUp-Down navigate, Home / End jump, F toggles fullscreen.
+  The counter reads slides.length, so it stays correct as you add or remove slides.
+  Replace the example slides below. Keep the components; delete what you do not use.
+-->
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #121a30;
+    --ink: #e8edf7;
+    --muted: #93a1bf;
+    --accent: #2bb9ff;
+    --accent2: #7c5cff;
+    --good: #36d399;
+    --warn: #f6b73c;
+    --line: #243150;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--sans); }
+  .deck { height: 100vh; width: 100vw; overflow: hidden; position: relative; }
+  .slide {
+    position: absolute; inset: 0; display: none;
+    padding: 5vh 7vw; flex-direction: column; justify-content: center;
+    animation: fade .25s ease;
+  }
+  .slide.active { display: flex; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: clamp(28px, 4.2vw, 56px); line-height: 1.05; margin: 0 0 18px; letter-spacing: -.02em; }
+  h2 { font-size: clamp(22px, 3vw, 40px); margin: 0 0 22px; letter-spacing: -.02em; }
+  h2 .kicker { display:block; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; font-weight: 700; }
+  p { font-size: clamp(16px, 1.5vw, 21px); line-height: 1.5; color: var(--ink); margin: 0 0 14px; max-width: 62ch; }
+  .muted { color: var(--muted); }
+  .big { font-size: clamp(34px, 6vw, 84px); font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+  .accent { color: var(--accent); }
+  .accent2 { color: var(--accent2); }
+  .good { color: var(--good); }
+  .warn { color: var(--warn); }
+  .mono { font-family: var(--mono); }
+
+  .formula {
+    font-family: var(--mono); font-size: clamp(15px, 1.9vw, 26px);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 22px; margin: 6px 0 18px; line-height: 1.6; color: var(--ink);
+  }
+  .formula .op { color: var(--muted); }
+
+  table { border-collapse: collapse; width: 100%; font-size: clamp(13px, 1.4vw, 19px); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .8em; letter-spacing: .06em; text-transform: uppercase; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  tr.total td { border-top: 2px solid var(--accent); border-bottom: none; font-weight: 800; }
+  tbody tr:hover { background: rgba(43,185,255,.05); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .card .label { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .card .v { font-size: clamp(24px, 3vw, 40px); font-weight: 800; letter-spacing: -.02em; }
+  .card .sub { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  ul.tight { margin: 0; padding-left: 1.1em; }
+  ul.tight li { font-size: clamp(15px, 1.5vw, 21px); line-height: 1.5; margin-bottom: 12px; max-width: 62ch; }
+  ul.tight li::marker { color: var(--accent); }
+
+  .footnote { position: absolute; left: 7vw; right: 7vw; bottom: 3.5vh; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .tag { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 10px; }
+  .quote { border-left: 3px solid var(--accent2); padding: 4px 0 4px 18px; color: var(--ink); font-style: italic; max-width: 56ch; }
+
+  .hud { position: fixed; bottom: 16px; right: 20px; font-family: var(--mono); font-size: 13px; color: var(--muted); z-index: 10; }
+  .hud b { color: var(--ink); }
+  .bar { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent2)); z-index: 10; transition: width .2s; }
+  .nav { position: fixed; bottom: 14px; left: 20px; z-index: 10; display: flex; gap: 8px; }
+  .nav button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-size: 14px; cursor: pointer; }
+  .nav button:hover { border-color: var(--accent); }
+  .hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 12px; z-index: 10; }
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide active">
+    <h1>The FOC flywheel is missing its <span class="accent">first turn</span></h1>
+    <p class="muted">A capability review: what the platform powers today, what each missing feature unlocks, and what not building them costs. Internal, FilOz. September 2026.</p>
+    <div class="footnote">Sources: FOC Pod Charter + Q3 budget update, Pricing Sensitivity sheet, Infura migration evaluation, H2 GTM Strategy deck, filecoin-services main (calibnet v1.4.0) and synapse-sdk 1.2.1 source, verified 2026-09-01/02. Figure-by-figure math in the companion notes.</div>
+  </section>
+
+  <!-- 2 · THE GAP -->
+  <section class="slide">
+    <h2><span class="kicker">where we are</span>Settled revenue is $21-40 per month. The targets are thousands to millions.</h2>
+    <div class="grid3" style="margin-top:6px">
+      <div class="card"><div class="big">$21.62</div><p class="muted">FWSS settled in August (Jul $39.46, Jun $25.30)</p></div>
+      <div class="card"><div class="big">&gt;$15K</div><p class="muted">pod H2 target: paid/settled via FOC before end of 2026</p></div>
+      <div class="card"><div class="big">$20M</div><p class="muted">network ARR goal FOC contributes to, with 20 paying brands</p></div>
+    </div>
+    <p style="margin-top:18px">H1 went fine against its own bar: the $1K ARR target was hit (852 USDFC). But there has been no new customer since the Storacha cohort (about $1,320 ARR), and the H2 north star (5 power users at $500+/mo) needs something to change.</p>
+    <div class="footnote">Settled figures and "no new customer" quote: Infura migration evaluation, 2026-08-19. Targets: Pod Charter Q3 budget update; H2 GTM Strategy deck.</div>
+  </section>
+
+  <!-- 3 · WHY -->
+  <section class="slide">
+    <h2><span class="kicker">why the wheel does not turn</span>Building on FOC loses money by construction</h2>
+    <table>
+      <tr><th>Cost line</th><th>Today</th><th>Evidence</th></tr>
+      <tr><td>Cost to build</td><td>Raw contract calls; no SDK path to the new access rules; every app is a bespoke integration</td><td class="muted">synapse-sdk source: authorizer exists only in the generated ABI</td></tr>
+      <tr><td>Cost to run</td><td>The operator's account pays storage, every write, and every read</td><td class="muted">In FOC's own pricing scenarios, per-piece write fees are 53-69% of the monthly bill at every tier, egress another 24-37%</td></tr>
+      <tr><td>Revenue</td><td>Zero native surface. No custody means builders bring their own billing stack</td><td class="muted">Payment hooks and escrow do not exist yet as products</td></tr>
+    </table>
+    <p style="margin-top:16px">A successful free app is just a bigger bill. Nobody spins a flywheel that starts with losing money.</p>
+    <div class="footnote">Fee-share figures: Pricing Sensitivity sheet scenario model (hobbyist $0.37/mo to enterprise $19K/mo; write fees dominate storage at every tier).</div>
+  </section>
+
+  <!-- 4 · FLYWHEEL -->
+  <section class="slide">
+    <h2><span class="kicker">the model</span>The flywheel exists. The first bearing is stuck.</h2>
+    <div class="formula">profitable builders <span class="op">&rarr;</span> apps <span class="op">&rarr;</span> users + demand <span class="op">&rarr;</span> onchain ARR <span class="op">&rarr;</span> SP supply + tooling <span class="op">&rarr;</span> cheaper, better <span class="op">&rarr;</span> more builders</div>
+    <p style="margin-top:16px">Every feature in this deck is graded by one question: which bearing does it grease? Most of the high-value ones act on the first: making it possible for a builder to profit.</p>
+    <p class="muted">This matches the assignment GTM already set: map storage needs to FOC's unique capabilities, find where S3 is a bad fit, and pick small niches with breakout growth potential.</p>
+    <div class="footnote">Assignment framing: Juan's FDS advice, H2 GTM Strategy deck (July 2026).</div>
+  </section>
+
+  <!-- 5 · WHAT IS REAL -->
+  <section class="slide">
+    <h2><span class="kicker">the foundation, verified in source</span>The primitives shipped. We proved them with working software.</h2>
+    <div class="grid2">
+      <div class="card"><b class="good">SHIPPED</b><p>Per-dataset programmable access rules: a contract decides who writes, with rate limits and roles. Live on calibration (v1.4.0); mainnet release in progress this week.</p></div>
+      <div class="card"><b class="good">SHIPPED</b><p>Anyone can fund an app's storage account, permissionlessly, with sender-attributed on-chain receipts. Deletion and shutdown can be vetoed until a chosen date.</p></div>
+      <div class="card"><b class="good">LIVE</b><p>A two-player game running on calibration with no server: every move is a signed record, both browsers compute the same board, end-to-end tested across isolated browsers.</p></div>
+      <div class="card"><b class="warn">PATTERN</b><p>Write-once retention, multi-step signed hand-offs, and crowd apps with contract-enforced cooldowns: all expressible today with custom contracts and app code.</p></div>
+    </div>
+    <div class="footnote">Every status verified against filecoin-services main and synapse-sdk 1.2.1; file-and-line citations in the research repo (foc-collab/research/).</div>
+  </section>
+
+  <!-- 6 · WHAT THAT MEANS -->
+  <section class="slide">
+    <h2><span class="kicker">tier 1, in plain terms</span>Serverless apps work today, for participants we set up</h2>
+    <div class="grid2">
+      <div class="card"><b>Turn-based games, Words-with-Friends style <span class="good mono" style="font-size:12px">LIVE</span></b><p class="muted">Any two browsers on Earth; moves land in 30-60 seconds; no backend anywhere.</p></div>
+      <div class="card"><b>A community pet that eats money <span class="mono muted" style="font-size:12px">CONCEPT</span></b><p class="muted">Tamagotchi whose health bar is the real funding balance of its own storage. Every feeding is an attributed payment; run out and the protocol gives about 30 days before the data is at risk.</p></div>
+      <div class="card"><b>Hand-off chains with signed receipts <span class="warn mono" style="font-size:12px">PROTOTYPED</span></b><p class="muted">Work passes between people or AI agents; each step signed, ordered, verifiable by outsiders. The shape our agent provenance bet needs.</p></div>
+      <div class="card"><b>Write-once records, like S3 Object Lock <span class="warn mono" style="font-size:12px">PATTERN</span></b><p class="muted">Deletion vetoed until year N; $1,000 funds a terabyte for roughly 16 years at the current price list, with a publicly checkable balance.</p></div>
+    </div>
+    <div class="footnote">16-year figure: $2.5/TiB/mo per copy, 2 copies, current list; storage prices move. Corgi window: 30-day payment lockup tail, verified in FilecoinPayV1.</div>
+  </section>
+
+  <!-- 7 · THE MOAT -->
+  <section class="slide">
+    <h2><span class="kicker">the honest moat</span>No primitive is exclusive. The bundle is the moat, and it is unfinished.</h2>
+    <p>Three independent external reviews converged: every primitive (verifiable funding, gated writes, proofs, retention, coordinator-free state) exists somewhere else in pieces. What nobody else offers is all of it in one contract system: writes, proofs, balances, provider compensation, and app-level authorization together.</p>
+    <div class="formula">our defensibility <span class="op">=</span> our integration completeness</div>
+    <p class="muted">The reviews' one warning: "without cheap writes, good retrieval, and SDK support, it is mostly positioning." The threats are Walrus DX parity, Arweave/AO app frameworks, and our own write economics.</p>
+    <div class="footnote">Sell it as: auditable retention with programmable write rules, no coordinator server, at cold-storage economics. Not as "only possible on FOC".</div>
+  </section>
+
+  <!-- 8 · TIER 2 -->
+  <section class="slide">
+    <h2><span class="kicker">one round of tooling away</span>Open participation: strangers join from a link</h2>
+    <p>The contracts already allow public, rule-governed writing; we can hand-build any single app now. Three tooling gaps decide whether anyone else can:</p>
+    <table>
+      <tr><th>Gap</th><th>Where</th><th>What it opens</th></tr>
+      <tr><td>SDK path to access-rule contracts</td><td>synapse-sdk</td><td>every authorizer app stops being bespoke</td></tr>
+      <tr><td>Indexed reads (filter by label, activity feeds)</td><td>SDK over already-indexed events</td><td>search, embeddable views, consumer scale</td></tr>
+      <tr><td>Sponsored-public-writing reference contract</td><td>filecoin-services (merged in August, reverted for release timing)</td><td>zero-onboarding contributors</td></tr>
+    </table>
+    <p class="muted" style="margin-top:14px">Then: an r/place-style public canvas, conference artifacts funded by the ticket, comments on any published page with no comment server, community playlists.</p>
+  </section>
+
+  <!-- 9 · TIER 3 -->
+  <section class="slide">
+    <h2><span class="kicker">platform features after that</span>Economies inside the apps, at consumer scale</h2>
+    <div class="grid2">
+      <div class="card"><b>Payment hooks + a reference escrow</b><p class="muted">Entry fees, upgrades, bounties; apps that fund their own storage. The shipped payment rails support the composition; it needs a hardened reference contract.</p></div>
+      <div class="card"><b>Passkey sign-in</b><p class="muted">No wallet, no crypto knowledge. The access-rule design already anticipates WebAuthn/P-256 payloads; the gas cost needs measuring.</p></div>
+      <div class="card"><b>Batched multi-signer writes</b><p class="muted">Contract-enforced crowd actions cost about $0.011 each today because every action is its own transaction; batching cuts that to roughly $0.003 and lifts the throughput ceiling.</p></div>
+      <div class="card"><b>Payments for delegated agent keys</b><p class="muted">Today only the owner wallet can pay. Fixing this is what lets AI agents pay and get paid without a human in the loop.</p></div>
+    </div>
+    <p style="margin-top:12px">Each of these also upgrades every tier 1 and 2 example: the pet gains paid adoptions, the canvas gains event-scale crowds, the hand-off chain gains per-step escrow.</p>
+  </section>
+
+  <!-- 10 · DESTINATIONS x GTM -->
+  <section class="slide">
+    <h2><span class="kicker">destinations, tagged to the bets we already made</span>Every destination lands on an existing GTM hypothesis</h2>
+    <table>
+      <tr><th>Destination</th><th>GTM bet / wedge</th><th>Blocked by</th></tr>
+      <tr><td>Signed multi-step hand-offs with receipts (human-in-the-loop review)</td><td>Agents bet; AI-governance + compliance wedges; the provenance validation the GTM plan names</td><td>SDK authorizer path; indexed reads</td></tr>
+      <tr><td>Viewer notes and saves on published pages</td><td>IPFS / Filecoin Pin bet ("the one place we have evidence of product-market fit")</td><td>sponsored writes; indexed reads; passkeys</td></tr>
+      <tr><td>Retention-locked records as a product</td><td>Compliance wedge; finance sell-through partners (H13)</td><td>retention-lock productization; willingness-to-pay unproven, needs a named vertical</td></tr>
+      <tr><td>Self-funding apps (pet, canvas, events)</td><td>No tracked bet: brand + payments-wedge demos. Demand undiscovered, and we say so</td><td>payment hooks; batching</td></tr>
+    </table>
+    <div class="footnote">Bets, wedges, and quoted lines: H2 GTM Strategy deck and the FOC GTM Hypothesis Tracker.</div>
+  </section>
+
+  <!-- 11 · ASSUMPTIONS -->
+  <section class="slide">
+    <h2><span class="kicker">what's given, what's computed, what's a guess</span>Assumptions behind every number</h2>
+    <table>
+      <tr><th>Figure</th><th>Status</th><th>Source</th></tr>
+      <tr><td>$21-40/mo settled; no new customer since Storacha; $1,320 cohort ARR</td><td class="good">given</td><td>Infura migration evaluation (2026-08-19)</td></tr>
+      <tr><td>$1K H1 target hit (852 USDFC); &gt;$15K H2; 5 power users at $500+/mo</td><td class="good">given</td><td>Pod Charter Q3 budget update</td></tr>
+      <tr><td>Write fees 53-69% of bills; add fee $0.002-0.003/piece</td><td class="good">given</td><td>Pricing Sensitivity sheet scenario model</td></tr>
+      <tr><td>$0.011 per contract-enforced action; $0.003 batched</td><td class="warn">computed</td><td>price list op fees; assumes one action per transaction vs 61-piece batches</td></tr>
+      <tr><td>$1,000 funds 1 TiB about 16 years</td><td class="warn">computed</td><td>$2.5/TiB/mo x 2 copies at current list; prices move</td></tr>
+      <tr><td>Moat verdicts</td><td class="warn">external review</td><td>three independent model reviews, 2026-09-02, prompted to allow "no moat"</td></tr>
+    </table>
+    <div class="footnote"><span class="good">Green</span> = read from the named source. <span class="warn">Amber</span> = computed or externally sourced; math in the companion notes.</div>
+  </section>
+
+  <!-- 12 · THE ASK -->
+  <section class="slide">
+    <h2><span class="kicker">the ask</span>Three investments, in order, and a working demo behind each claim</h2>
+    <div class="grid3">
+      <div class="card"><b>1. SDK path to access rules</b><p class="muted">Opens every tier 2 destination; ends bespoke-only building.</p></div>
+      <div class="card"><b>2. Indexed reads</b><p class="muted">Search, feeds, embeddable views; the events are already indexed, the SDK just cannot see them.</p></div>
+      <div class="card"><b>3. Payment hooks + batching</b><p class="muted">Gives builders revenue and crowd-scale costs; the two levers that unstick the first bearing.</p></div>
+    </div>
+    <p style="margin-top:18px">Everything in this deck is backed by running code or a cited source, and the probes that produced it cost testnet money and spare time. Ask for a live demo of any claim.</p>
+    <div class="footnote">Research trail: foc-collab repo, research/ directory (strategy, peer reviews, cluster reports, this deck's notes).</div>
+  </section>
+
+<div class="hud"><b id="cur">1</b> / <span id="total">1</span></div>
+<div class="nav"><button onclick="go(-1)">&larr; Prev</button><button onclick="go(1)">Next &rarr;</button></div>
+<div class="hint">&larr; &rarr; or Space to navigate &middot; F for fullscreen</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let i = 0;
+  document.getElementById('total').textContent = slides.length;
+  function render() {
+    slides.forEach((s, n) => s.classList.toggle('active', n === i));
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('bar').style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  function go(d) { i = Math.max(0, Math.min(slides.length - 1, i + d)); render(); }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+    else if (e.key === 'Home') { i = 0; render(); }
+    else if (e.key === 'End') { i = slides.length - 1; render(); }
+    else if (e.key.toLowerCase() === 'f') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+  render();
+</script>
+</body>
+</html>
