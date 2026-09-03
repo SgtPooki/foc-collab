@@ -25,10 +25,14 @@ test('address space spreads across coats, patterns, and accessories', () => {
 test('real adopters keep their corgi across versions', () => {
   const pins = [
     // first calibration adopter, 2026-09-03, feed tx 0xf614a98c…
-    ['0x44f08D1beFe61255b3C3A349C392C560FA333759', 'big saddle white corgi with a bandana, energetic'],
+    ['0x44f08D1beFe61255b3C3A349C392C560FA333759', 'big saddle white corgi with a bandana, energetic', 'Willow Jr.'],
+    // second adopter, 2026-09-03, feed tx 0x90138b14…
+    ['0x12e83C954051B7c91F70d001F80dc9Ff91737b83', 'fluffy eyepatch white corgi, social', 'Nutmeg the Zoomer'],
     // the test feeder wallet
-    ['0xd677eFcD0Ae24e42FD74B9865C16f3fDaBC82492', 'big saddle cream corgi with a bow, curious'],
+    ['0xd677eFcD0Ae24e42FD74B9865C16f3fDaBC82492', 'big saddle cream corgi with a bow, curious', 'Wensley'],
   ]
-  for (const [address, expected] of pins) assert.equal(describe(traitsOf(address)), expected)
-  assert.equal(nameOf('0x44f08D1beFe61255b3C3A349C392C560FA333759'), 'Willow Jr.')
+  for (const [address, expected, name] of pins) {
+    assert.equal(describe(traitsOf(address)), expected)
+    assert.equal(nameOf(address), name)
+  }
 })
