@@ -304,7 +304,7 @@ function pickTarget(brain, from) {
 
 // ---------------------------------------------------------------- park
 
-export function createPark(canvas, { reducedMotion = false, onPick = null, onHover = null } = {}) {
+export function createPark(canvas, { reducedMotion = false, onPick = null, onHover = null, onLabels = null } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'low-power' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   renderer.shadowMap.enabled = true
@@ -315,9 +315,9 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
 
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80)
-  camera.position.set(0, 4.2, 8.6)
+  camera.position.set(0, 3.3, 7.6)
   const controls = new OrbitControls(camera, canvas)
-  controls.target.set(0, 0.4, 0)
+  controls.target.set(0, 0.45, 0.4)
   controls.enablePan = false
   controls.minDistance = 4.5
   controls.maxDistance = 17
@@ -338,9 +338,11 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
   sun.shadow.camera.top = 9; sun.shadow.camera.bottom = -9
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 30
   sun.shadow.bias = -0.0008
+  sun.shadow.intensity = 0.75
+  const moon = new THREE.AmbientLight('#6b7fb8', 0)
   const lamp = new THREE.PointLight('#ffb35c', 0, 16, 1.1)
   lamp.position.set(2.8, 2.6, 2.2)
-  scene.add(hemi, sun, lamp)
+  scene.add(hemi, sun, lamp, moon)
 
   // ground and props
   const grass = mat('#6fae5a')
@@ -464,6 +466,36 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
   fireflies.visible = false
   scene.add(fireflies)
 
+  // hearts that rise from the mascot when a feed lands
+  const hearts = new THREE.Group()
+  scene.add(hearts)
+  function celebrate(at) {
+    const origin = at ?? corgis.get('mascot')?.root.position ?? new THREE.Vector3()
+    for (let i = 0; i < 12; i++) {
+      const h = new THREE.Group()
+      const m = new THREE.MeshBasicMaterial({ color: i % 3 === 0 ? '#ff9db3' : '#e0506f', transparent: true, opacity: 1 })
+      h.add(mesh(new THREE.SphereGeometry(0.07, 8, 6), m, { x: -0.05, y: 0.03, castShadow: false }), mesh(new THREE.SphereGeometry(0.07, 8, 6), m, { x: 0.05, y: 0.03, castShadow: false }))
+      const tip = mesh(new THREE.ConeGeometry(0.1, 0.14, 8), m, { y: -0.06, castShadow: false })
+      tip.rotation.x = Math.PI
+      h.add(tip)
+      h.position.set(origin.x + (Math.random() - 0.5) * 0.8, origin.y + 0.6, origin.z + (Math.random() - 0.5) * 0.8)
+      h.userData = { vy: 1 + Math.random() * 0.8, life: 1.6 + Math.random() * 0.6, mat: m, wobble: Math.random() * Math.PI * 2 }
+      hearts.add(h)
+    }
+    if (corgis.has('mascot')) corgis.get('mascot').brain.jump = 1
+    start()
+  }
+  function updateHearts(dt, now) {
+    for (const h of [...hearts.children]) {
+      h.userData.life -= dt
+      h.position.y += h.userData.vy * dt
+      h.position.x += Math.sin(now * 3 + h.userData.wobble) * dt * 0.3
+      h.userData.mat.opacity = Math.max(0, Math.min(1, h.userData.life))
+      h.lookAt(camera.position)
+      if (h.userData.life <= 0) hearts.remove(h)
+    }
+  }
+
   // gravestone (only when the mascot is dead)
   const grave = new THREE.Group()
   grave.visible = false
@@ -502,8 +534,22 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
       pickTarget(brain, root.position)
     }
     if (role === 'ghost') {
-      root.position.set(-1.6, 0, 3.4)
-      root.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.45; o.castShadow = false } })
+      root.position.set(-1.7, 0, 2.6)
+      brain.heading = 0.4
+      root.traverse((o) => {
+        if (!o.isMesh) return
+        o.material = o.material.clone()
+        o.material.transparent = true
+        o.material.opacity = 0.55
+        o.material.emissive = new THREE.Color(traits.accent)
+        o.material.emissiveIntensity = 0.35
+        o.castShadow = false
+      })
+      // a soft glowing ring on the grass marks the spot as "yours"
+      const ring = mesh(new THREE.RingGeometry(0.55, 0.7, 32), new THREE.MeshBasicMaterial({ color: traits.accent, transparent: true, opacity: 0.55, side: THREE.DoubleSide }), { y: 0.02, castShadow: false })
+      ring.rotation.x = -Math.PI / 2
+      ring.userData.ring = true
+      root.add(ring)
     }
     root.rotation.y = brain.heading
     root.userData.key = key
@@ -526,10 +572,12 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     const night = theme === 'dark'
     scene.background = new THREE.Color(night ? '#141a26' : '#cfe6f6')
     scene.fog = new THREE.Fog(scene.background, 14, 34)
-    hemi.intensity = night ? 0.35 : 0.9
-    hemi.color.set(night ? '#7c8fb3' : '#ffffff')
-    sun.intensity = night ? 0.45 : 2.2
+    hemi.intensity = night ? 0.55 : 0.9
+    hemi.color.set(night ? '#8fa3d1' : '#ffffff')
+    moon.intensity = night ? 0.6 : 0
+    sun.intensity = night ? 0.7 : 2.2
     sun.color.set(night ? '#9fb4ff' : '#fff4de')
+    sun.shadow.intensity = night ? 0.55 : 0.75
     lamp.intensity = night ? 28 : 0
     bulb.material.emissiveIntensity = night ? 1.2 : 0
     fireflies.visible = night
@@ -765,6 +813,21 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     if (ballState.v.lengthSq() < 0.01 && ball.position.y <= 0.221) ballState.v.set(0, 0, 0)
   }
 
+  // nameplates: the host owns the DOM; we report screen positions every frame
+  const labelVec = new THREE.Vector3()
+  function labelPositions() {
+    const w = canvas.clientWidth, h = canvas.clientHeight
+    const out = []
+    for (const c of corgis.values()) {
+      labelVec.copy(c.root.position)
+      labelVec.y += (c.role === 'mascot' ? 1.25 : 0.95) * c.traits.size
+      labelVec.project(camera)
+      if (labelVec.z > 1) continue
+      out.push({ key: c.root.userData.key, address: c.root.userData.address, role: c.role, x: (labelVec.x + 1) / 2 * w, y: (1 - labelVec.y) / 2 * h, depth: labelVec.z })
+    }
+    return out
+  }
+
   let raf = 0
   let running = false
   function frame() {
@@ -774,6 +837,7 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     if (!reducedMotion) {
       for (const c of corgis.values()) animateCorgi(c, dt, now)
       updateBall(dt)
+      updateHearts(dt, now)
       if (fireflies.visible) {
         for (const f of fireflies.children) {
           f.position.y = f.userData.base.y + Math.sin(now * 1.1 + f.userData.phase) * 0.25
@@ -784,6 +848,7 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     }
     controls.update()
     renderer.render(scene, camera)
+    if (onLabels) onLabels(labelPositions())
     if (running && !document.hidden) raf = requestAnimationFrame(frame)
   }
   function start() {
@@ -868,5 +933,5 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     renderer.dispose()
   }
 
-  return { setState, resize, destroy, scene, camera, controls, renderer, corgis, renderOnce, get mascotKey() { return mascotKey } }
+  return { setState, resize, destroy, celebrate, scene, camera, controls, renderer, corgis, renderOnce, get mascotKey() { return mascotKey } }
 }

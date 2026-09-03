@@ -96,7 +96,7 @@ let park = null
 function ensurePark() {
   if (park) return park
   try {
-    park = createPark($('park-canvas'), { reducedMotion, onHover: showTooltip, onPick: showTooltip })
+    park = createPark($('park-canvas'), { reducedMotion, onHover: showTooltip, onPick: showTooltip, onLabels: renderLabels })
   } catch (err) {
     console.error(err)
     $('stage').classList.add('fallback')
@@ -104,6 +104,32 @@ function ensurePark() {
     $('stage-hint').hidden = true
   }
   return park
+}
+
+const labelEls = new Map()
+function labelText(l) {
+  if (l.role === 'mascot') return 'THE corgi'
+  if (l.role === 'ghost') return 'yours?'
+  return short(l.address)
+}
+function renderLabels(list) {
+  const host = $('labels')
+  const seen = new Set()
+  for (const l of list) {
+    seen.add(l.key)
+    let el = labelEls.get(l.key)
+    if (!el) {
+      el = document.createElement('span')
+      el.className = l.role
+      el.textContent = labelText(l)
+      host.appendChild(el)
+      labelEls.set(l.key, el)
+    }
+    el.style.left = `${l.x}px`
+    el.style.top = `${l.y}px`
+    el.style.opacity = String(Math.max(0.35, 1 - (l.depth - 0.9) * 6))
+  }
+  for (const [key, el] of labelEls) if (!seen.has(key)) { el.remove(); labelEls.delete(key) }
 }
 
 function showTooltip(hit) {
@@ -282,9 +308,9 @@ function renderWall(s, clock) {
     $('wall').innerHTML = '<p class="empty">No corgi has died yet. When one does, its final state is recorded here, folded from the same deposit log as everything else.</p>'
     return
   }
-  const cause = (g) => (g.died.cause === 'withdrawn' ? 'when its owner withdrew funds and runway fell under' : 'when nobody fed it and runway fell under')
+  const epitaph = (g) => (g.died.cause === 'withdrawn' ? 'Its owner took the food away.' : 'Nobody came in time.')
   const lived = (g) => fmtDays(g.died.epoch - g.born.epoch)
-  $('wall').innerHTML = s.generations.map((g, i) => `<article>${corgiSvg(`${s.payer}${i}`, { life: 'dead', title: `generation ${i + 1}` })}<div><p><strong>Generation ${i + 1}</strong> <span class="muted small">lived ${lived(g)}</span></p><p class="small muted">Born ${fmtDate(clock, g.born.epoch)}, revived by ${addrLink(g.born.by)}. Died ${fmtDate(clock, g.died.epoch)} ${cause(g)} ${foldConfig.deathDays} days.</p></div></article>`).join('')
+  $('wall').innerHTML = s.generations.map((g, i) => `<article>${corgiSvg(`${s.payer}${i}`, { life: 'dead', title: `generation ${i + 1}` })}<div><p><strong>Here lies generation ${i + 1}</strong> <span class="muted small">lived ${lived(g)}</span></p><p class="epitaph">${epitaph(g)}</p><p class="small muted">${fmtDate(clock, g.born.epoch)} to ${fmtDate(clock, g.died.epoch)}. Brought to life by ${addrLink(g.born.by)}.</p></div></article>`).join('')
 }
 
 function statusLine(s, clock) {
@@ -296,6 +322,7 @@ function statusLine(s, clock) {
 function render(v) {
   const { state: s, clock, account } = v
   document.title = `FOC Corgi: ${s.life === 'dead' ? 'in memoriam' : `${s.life}, ${s.mood}`}`
+  document.body.classList.toggle('dead', s.life === 'dead')
   $('chain-badge').textContent = `${net.name.replace('Filecoin - ', '')} · epoch ${s.epoch}`
   $('gen-badge').textContent = `generation ${s.generation}`
   $('payer-link').textContent = short(s.payer)
@@ -361,6 +388,11 @@ function renderYours() {
 function renderAmountHint() {
   if (!view) return
   const rate = view.account.ratePerEpoch
+  for (const b of document.querySelectorAll('#presets .preset')) {
+    const d = daysBought(chain.parseUnits(b.dataset.amount, 18), rate)
+    b.querySelector('.days').textContent = d == null ? '' : `+${d.toFixed(0)} days of life`
+    b.setAttribute('aria-pressed', String(b.dataset.amount === $('amount').value.trim()))
+  }
   let amount
   try { amount = chain.parseUnits($('amount').value.trim() || '0', 18) } catch { amount = 0n }
   const days = daysBought(amount, rate)
@@ -432,6 +464,8 @@ async function submitFeed(ev) {
     const days = daysBought(amount, view?.account.ratePerEpoch ?? 0n)
     const summary = `Fed ${usd(amount, 4)} USDFC in epoch ${result.epoch}${days ? `, adding ${days.toFixed(1)} days of life` : ''}${adopted ? '. Your corgi is in the park' : ''}. ${txLink(result.hash)}`
     feedStatus(`${summary}. Waiting for the chain to index it, then refreshing the corgi.`, 'ok')
+    park?.celebrate()
+    $('stage').scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' })
     await chain.waitForEpoch(client, result.epoch)
     await load({ quiet: true })
     feedStatus(summary, 'ok')
@@ -460,6 +494,19 @@ $('connect').addEventListener('click', connect)
 $('feed-form').addEventListener('submit', submitFeed)
 $('amount').addEventListener('input', renderAmountHint)
 $('share').addEventListener('click', share)
+$('fullscreen').addEventListener('click', async () => {
+  const stage = $('stage')
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen()
+    else await stage.requestFullscreen()
+  } catch (err) {
+    $('stage-hint').textContent = `Fullscreen is not available here: ${err?.message ?? err}`
+  }
+})
+document.addEventListener('fullscreenchange', () => {
+  $('fullscreen').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'
+  park?.resize()
+})
 for (const b of document.querySelectorAll('button.preset')) b.addEventListener('click', () => { $('amount').value = b.dataset.amount; renderAmountHint() })
 
 ensurePark()
