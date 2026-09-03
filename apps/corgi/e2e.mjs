@@ -65,7 +65,7 @@ async function walletRequest({ method, params = [] }) {
   return rpc.request({ method, params })
 }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
 const context = await browser.newContext({ viewport: { width: 1000, height: 1400 } })
 await context.exposeFunction('__walletRequest', async (args) => {
   const out = await walletRequest(args)
@@ -153,7 +153,7 @@ if (process.env.E2E_DEATH_ARC === '1') {
   await open()
   await page.locator('#memorial-panel').waitFor({ state: 'visible', timeout: 60000 })
   assert.match(await page.locator('#memorial-countdown').textContent(), /ceases to exist in/)
-  assert.ok((await page.locator('#mascot.dead').count()) === 1, 'dead sprite')
+  assert.match(await page.locator('#headline').textContent(), /In memoriam/)
   await page.screenshot({ path: path.join(DIR, '..', 'e2e-dead.png'), fullPage: true })
 
   const reviveAmount = Number(formatUnits(dead.state.memorial.reviveNeeds, 18)) * 1.5 + 0.001

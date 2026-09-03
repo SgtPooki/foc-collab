@@ -26,11 +26,17 @@ test('runway and life thresholds', () => {
   assert.equal(runwayEpochs(0n, RATE), 0)
   assert.equal(runwayEpochs(days(10), 0n), Infinity)
   assert.equal(lifeOf(Infinity), 'unfunded')
-  assert.equal(lifeOf(91 * EPOCHS_PER_DAY), 'thriving')
+  assert.equal(lifeOf(100 * EPOCHS_PER_DAY), 'thriving')
   assert.equal(lifeOf(60 * EPOCHS_PER_DAY), 'fine')
   assert.equal(lifeOf(20 * EPOCHS_PER_DAY), 'sick')
   assert.equal(lifeOf(10 * EPOCHS_PER_DAY), 'critical')
   assert.equal(lifeOf(6 * EPOCHS_PER_DAY), 'dead')
+})
+
+test('life left and death epoch count down to the death line', () => {
+  const s = fold({ payer: PAYER, account: account(20), deposits: [dep(A, days(30), 90_000)] })
+  assert.equal(s.lifeEpochs, 13 * EPOCHS_PER_DAY)
+  assert.equal(s.deathEpoch, 100_000 + 13 * EPOCHS_PER_DAY)
 })
 
 test('mood comes from distinct feeders, not amounts', () => {

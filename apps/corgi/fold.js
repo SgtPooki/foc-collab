@@ -30,12 +30,13 @@ export const EPOCHS_PER_DAY = 2880 // synapse-core/src/utils/constants.ts:18
 export const LOCKUP_PERIOD_EPOCHS = 30 * EPOCHS_PER_DAY // PriceListUSDFC.sol DEFAULT_LOCKUP_PERIOD
 
 export const DEFAULT_CONFIG = Object.freeze({
-  // life thresholds in days of runway (deficit point), evaluated top-down
-  thrivingDays: 90,
-  sickDays: 30,
-  criticalDays: 14,
   // death is declared while runway remains so the memorial is viewable
   deathDays: 7,
+  // life thresholds in days of runway (deficit point), evaluated top-down;
+  // relative to death they are 7, 30, and 90 days of life left
+  criticalDays: 14,
+  sickDays: 37,
+  thrivingDays: 97,
   // distinct feeders inside this many days drive mood
   moodWindowDays: 7,
   // one deposit at or above this spawns a corgi for the sender (wei)
@@ -237,6 +238,9 @@ export function fold(input, config = DEFAULT_CONFIG) {
     unreserved: account.unreserved,
     runwayEpochs: runway,
     grossCoverageEpochs: gross,
+    // epochs of life left before the death line, and the epoch it lands on
+    lifeEpochs: runway === Infinity ? Infinity : Math.max(0, runway - config.deathDays * EPOCHS_PER_DAY),
+    deathEpoch: runway === Infinity ? null : account.epoch + runway - config.deathDays * EPOCHS_PER_DAY,
     life,
     mood: moodOf(feeders.size),
     distinctFeeders: feeders.size,

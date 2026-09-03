@@ -4,35 +4,19 @@
  * mascot uses the payer address the same way. Pure: string in, string out.
  */
 
-const COATS = [
-  { name: 'red', body: '#d9823b', light: '#f6e3c8' },
-  { name: 'fawn', body: '#e0a25f', light: '#fbf1e2' },
-  { name: 'sable', body: '#a35f2a', light: '#f3dfc4' },
-  { name: 'tricolor', body: '#2f2a28', light: '#f4ece2' },
-  { name: 'cream', body: '#e9c79a', light: '#fff7ea' },
-  { name: 'ginger', body: '#c9652c', light: '#f8e6d0' },
-]
-const ACCESSORIES = ['none', 'collar', 'bandana', 'bow', 'glasses', 'hat']
-const COLLARS = ['#2b6cb0', '#c53030', '#2f855a', '#6b46c1', '#b7791f']
+import { traitsOf as sharedTraits } from './traits.js'
 
-function bytesOf(address) {
-  const hex = String(address ?? '').replace(/^0x/i, '').padEnd(40, '0')
-  const out = []
-  for (let i = 0; i < 20; i++) out.push(Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16) || 0)
-  return out
-}
-
-/** Traits for an address: coat, size, ear tilt, accessory, bounce tempo. */
+/** 2D view of the shared trait sheet (traits.js). */
 export function traitsOf(address) {
-  const b = bytesOf(address)
+  const t = sharedTraits(address)
   return {
-    coat: COATS[b[0] % COATS.length],
-    accessory: ACCESSORIES[b[1] % ACCESSORIES.length],
-    collar: COLLARS[b[2] % COLLARS.length],
-    scale: 0.85 + (b[3] % 31) / 100, // 0.85 .. 1.15
-    earTilt: (b[4] % 21) - 10, // degrees
-    blaze: b[5] % 3, // 0 none, 1 stripe, 2 wide
-    tempo: 1.6 + (b[6] % 9) / 10, // seconds per bounce
+    coat: { name: t.coat.name, body: t.coat.body, light: t.coat.light },
+    accessory: t.accessory,
+    collar: t.accent,
+    scale: t.size,
+    earTilt: t.ears.tilt,
+    blaze: t.pattern === 'blaze' ? 2 : 0,
+    tempo: 2.4 / t.tempo, // seconds per bounce
   }
 }
 

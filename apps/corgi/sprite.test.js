@@ -7,7 +7,7 @@ test('traits are deterministic per address and differ across addresses', () => {
   assert.deepEqual(a, traitsOf('0x1111111111111111111111111111111111111111'))
   const b = traitsOf('0x0000000000000000000000000000000000000c02')
   assert.notDeepEqual(a, b)
-  assert.ok(a.scale >= 0.85 && a.scale <= 1.15)
+  assert.ok(a.scale >= 0.8 && a.scale <= 1.25)
 })
 
 test('svg reflects life and mood and is self-contained markup', () => {

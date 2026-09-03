@@ -11,6 +11,7 @@
   "dependencies": {
     "@filoz/synapse-core": "^0.8.1",
     "@filoz/synapse-sdk": "^1.2.1",
+    "three": "^0.182.0",
     "viem": "^2.56.1"
   },
   "devDependencies": {

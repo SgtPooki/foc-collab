@@ -33,8 +33,10 @@ into a corgi, and renders. No server, no indexer, no CDN at runtime.
   sets keeps the reconstruction exact.
 
 Files: `fold.js` (pure state), `chain.js` (reads and the two wallet
-transactions), `sprite.js` (address to corgi), `app.js` (render), `build.mjs`
-(bundle), `e2e.mjs` (acceptance test), `scripts/feed.mjs` (CLI feeding).
+transactions), `traits.js` (address to trait sheet), `park3d.js` (the
+three.js playground: procedural corgis, behaviours, props), `sprite.js` (2D
+thumbnails from the same traits), `app.js` (render), `build.mjs` (single
+bundle, no CDN), `e2e.mjs` (acceptance test), `scripts/feed.mjs` (CLI feeding).
 
 ## Create and fund a corgi (calibration)
 
