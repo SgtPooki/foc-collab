@@ -52,6 +52,10 @@ function lerpAngle(a, b, t) {
 
 /** Builds the corgi hierarchy. Returns the root group with named parts in userData. */
 export function buildCorgi(traits) {
+  // Proportions follow a cartoon Pembroke: a long low loaf about 2.4 body
+  // heights long, a deeper chest, fluffy pants at the rear, a fox head that
+  // is clearly smaller than the body with a wedge muzzle, big thin ears,
+  // very short legs with flat paws sitting on y = 0.
   const t = traits
   const root = new THREE.Group()
   const body = new THREE.Group()
@@ -60,213 +64,221 @@ export function buildCorgi(traits) {
   const dark = mat(t.coat.dark)
   const white = mat(WHITE)
   const parts = { body, legs: [], ears: [] }
+  const L = 0.55 + t.length * 0.35 // torso length 0.76 .. 0.87
+  const R = 0.21 + (t.fluff - 1) * 0.06 // torso radius 0.20 .. 0.23
+  const BODY_Y = 0.3
 
-  // torso: a long low capsule lying along z (corgis are long and low)
-  const torsoR = 0.28 * t.fluff
-  const L = t.length // 0.6 .. 0.9
-  const BODY_Y = 0.36
-  const torso = mesh(new THREE.CapsuleGeometry(torsoR, L, 6, 12), coat, { y: BODY_Y })
+  // torso, chest, pants
+  const torso = mesh(new THREE.CapsuleGeometry(R, L, 6, 14), coat, { y: BODY_Y })
   torso.rotation.x = Math.PI / 2
   body.add(torso)
-  // pattern layers
+  const chest = mesh(new THREE.SphereGeometry(R * 1.08, 16, 12), t.bib ? white : coat, { y: BODY_Y - 0.03, z: L * 0.45 })
+  chest.scale.set(1, 0.95, 1.05)
+  body.add(chest)
+  for (const side of [-1, 1]) {
+    const pants = mesh(new THREE.SphereGeometry(0.17 * t.fluff, 14, 10), coat, { x: side * 0.15, y: BODY_Y - 0.09, z: -L * 0.4 })
+    pants.scale.set(1, 1.05, 1.1)
+    body.add(pants)
+  }
   if (t.pattern === 'saddle' || t.pattern === 'tricolor') {
-    const saddle = mesh(new THREE.SphereGeometry(torsoR * 1.02, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), dark, { y: BODY_Y, z: -0.05 })
-    saddle.scale.set(1, 1, 1.4 + L * 0.9)
+    const saddle = mesh(new THREE.SphereGeometry(R * 1.03, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), dark, { y: BODY_Y, z: -0.02 })
+    saddle.scale.set(1, 1, 1.2 + L * 1.1)
     body.add(saddle)
   }
   if (t.pattern === 'merle') {
-    // large uneven overlapping patches rather than freckles
     const spots = rng(t.seed)
     for (let i = 0; i < 6; i++) {
-      const a = spots() * Math.PI * 1.4 - 0.2 // mostly on the back and flanks
-      const patch = mesh(new THREE.SphereGeometry(0.11 + spots() * 0.1, 10, 8), dark, {
-        x: Math.cos(a) * torsoR * 0.9, y: BODY_Y + Math.sin(a) * torsoR * 0.9, z: (spots() - 0.5) * L,
+      const a = spots() * Math.PI * 1.4 - 0.2
+      const patch = mesh(new THREE.SphereGeometry(0.09 + spots() * 0.08, 10, 8), dark, {
+        x: Math.cos(a) * R * 0.92, y: BODY_Y + Math.sin(a) * R * 0.92, z: (spots() - 0.5) * L,
       })
       patch.scale.set(0.7 + spots() * 0.5, 0.6 + spots() * 0.5, 1.3 + spots())
       body.add(patch)
     }
   }
-  if (t.bib) {
-    const bib = mesh(new THREE.SphereGeometry(torsoR * 0.85, 12, 8), white, { y: BODY_Y - 0.08, z: L * 0.45 })
-    bib.scale.set(0.9, 0.8, 1.1)
-    body.add(bib)
-  }
-  // belly
-  const belly = mesh(new THREE.CapsuleGeometry(torsoR * 0.8, L * 0.9, 4, 10), white, { y: BODY_Y - 0.12 })
+  // white belly stripe
+  const belly = mesh(new THREE.CapsuleGeometry(R * 0.5, L * 0.75, 4, 10), white, { y: BODY_Y - R * 0.7 })
   belly.rotation.x = Math.PI / 2
   belly.castShadow = false
   body.add(belly)
 
-  // legs: pivot at hip so they can swing; short by breed
+  // legs: pivot at the hip so they swing; paws are flat ovals on the ground
   const legLen = 0.16
-  const legPositions = [[0.16, L * 0.42], [-0.16, L * 0.42], [0.16, -L * 0.4], [-0.16, -L * 0.4]]
+  const legPositions = [[0.12, L * 0.42], [-0.12, L * 0.42], [0.14, -L * 0.4], [-0.14, -L * 0.4]]
   legPositions.forEach(([x, z], i) => {
     const pivot = new THREE.Group()
-    pivot.position.set(x, 0.2, z)
+    pivot.position.set(x, 0.19, z)
     const sock = i < t.socks
-    const leg = mesh(new THREE.CylinderGeometry(0.07, 0.065, legLen, 10), sock ? white : coat, { y: -legLen / 2 })
+    const leg = mesh(new THREE.CylinderGeometry(0.048, 0.045, legLen, 10), sock ? white : coat, { y: -legLen / 2 })
     pivot.add(leg)
-    const paw = mesh(new THREE.SphereGeometry(0.075, 10, 8), sock ? white : coat, { y: -legLen, z: 0.02 })
-    paw.scale.set(1, 0.6, 1.2)
+    const paw = mesh(new THREE.SphereGeometry(0.055, 10, 8), sock ? white : coat, { y: -legLen, z: 0.02 })
+    paw.scale.set(1.1, 0.6, 1.3)
     pivot.add(paw)
     body.add(pivot)
     parts.legs.push(pivot)
   })
 
-  // head group pivots at the neck
+  // neck and head; the head group pivots at the neck
+  const neck = mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.26, 12), t.bib ? white : coat, { y: BODY_Y + 0.12, z: L * 0.5 })
+  neck.rotation.x = -0.7
+  body.add(neck)
   const head = new THREE.Group()
-  head.position.set(0, BODY_Y + 0.2, L * 0.58)
+  head.position.set(0, BODY_Y + 0.27, L * 0.6)
+  head.scale.setScalar(1.15)
   body.add(head)
   parts.head = head
-  const skull = mesh(new THREE.SphereGeometry(0.25, 18, 14), coat, { y: 0.05, z: 0.02 })
+  const HR = 0.17
+  const skull = mesh(new THREE.SphereGeometry(HR, 18, 14), coat)
+  skull.scale.set(1, 0.88, 1)
   head.add(skull)
   if (t.pattern === 'mask' || t.pattern === 'tricolor') {
-    const maskM = mesh(new THREE.SphereGeometry(0.255, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), dark, { y: 0.05, z: 0.02 })
+    const maskM = mesh(new THREE.SphereGeometry(HR * 1.02, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), dark)
+    maskM.scale.set(1, 0.88, 1)
     head.add(maskM)
   }
+  // white muzzle mask and eyebrows
+  const muzzleMask = mesh(new THREE.SphereGeometry(HR * 0.7, 12, 10), white, { y: -0.05, z: 0.09 })
+  muzzleMask.scale.set(1.05, 0.75, 1)
+  head.add(muzzleMask)
   if (t.pattern === 'blaze') {
-    const blaze = mesh(new THREE.SphereGeometry(0.1, 10, 8), white, { y: 0.14, z: 0.2 })
-    blaze.scale.set(0.4, 1.3, 0.6)
+    const blaze = mesh(new THREE.SphereGeometry(0.06, 10, 8), white, { y: 0.08, z: 0.13 })
+    blaze.scale.set(0.45, 1.4, 0.7)
     head.add(blaze)
   }
   if (t.pattern === 'eyepatch') {
-    const patch = mesh(new THREE.SphereGeometry(0.12, 10, 8), dark, { x: 0.16, y: 0.07, z: 0.15 })
+    const patch = mesh(new THREE.SphereGeometry(0.075, 10, 8), dark, { x: 0.09, y: 0.05, z: 0.12 })
     patch.scale.set(1, 1.1, 0.5)
     head.add(patch)
   }
-  // cheeks and snout
-  for (const side of [-1, 1]) {
-    const cheek = mesh(new THREE.SphereGeometry(0.12, 10, 8), white, { x: side * 0.15, y: -0.06, z: 0.13 })
-    head.add(cheek)
-  }
-  // foxy wedge snout: a cone pointing forward
-  const snout = mesh(new THREE.ConeGeometry(0.13, 0.3, 12), white, { y: -0.03, z: 0.27 })
-  snout.rotation.x = Math.PI / 2
-  snout.scale.set(1.15, 0.8, 1)
-  head.add(snout)
-  const nose = mesh(new THREE.SphereGeometry(0.045, 10, 8), mat('#1c1a19', { roughness: 0.4 }), { y: 0.02, z: 0.42 })
+  // wedge muzzle: a flattened capsule pointing forward, nose on its tip
+  const muzzle = mesh(new THREE.CapsuleGeometry(0.07, 0.12, 4, 10), white, { y: -0.05, z: 0.16 })
+  muzzle.rotation.x = Math.PI / 2
+  muzzle.scale.set(1, 0.7, 1)
+  head.add(muzzle)
+  const nose = mesh(new THREE.SphereGeometry(0.03, 10, 8), mat('#1c1a19', { roughness: 0.4 }), { y: -0.03, z: 0.285 })
   head.add(nose)
-  // eyes with highlights
-  // big wide-set eyes, low on the face (baby schema)
+  // almond eyes, moderately spaced
   const glint = mat('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.6 })
   parts.eyes = []
   for (const side of [-1, 1]) {
     const colour = side === 1 && t.oddEye ? t.oddEye : t.eyes
-    const eye = mesh(new THREE.SphereGeometry(0.055, 12, 10), mat(colour, { roughness: 0.3 }), { x: side * 0.155, y: 0.05, z: 0.155 })
-    const shine = mesh(new THREE.SphereGeometry(0.018, 6, 6), glint, { x: side * 0.15 + 0.015, y: 0.07, z: 0.215 })
+    const eye = mesh(new THREE.SphereGeometry(0.042, 12, 10), mat(colour, { roughness: 0.3 }), { x: side * 0.08, y: 0.035, z: 0.14 })
+    eye.scale.set(1, 1.15, 0.8)
+    const shine = mesh(new THREE.SphereGeometry(0.012, 6, 6), glint, { x: side * 0.075 + 0.01, y: 0.05, z: 0.165 })
     head.add(eye, shine)
     parts.eyes.push(eye)
   }
-  // brows for expression
+  for (const side of [-1, 1]) {
+    const brow = mesh(new THREE.SphereGeometry(0.022, 8, 6), t.pattern === 'tricolor' || t.pattern === 'mask' ? white : mat(t.coat.dark), { x: side * 0.075, y: 0.085, z: 0.13 })
+    head.add(brow)
+  }
   parts.brows = []
   for (const side of [-1, 1]) {
-    const brow = mesh(new THREE.BoxGeometry(0.09, 0.02, 0.02), mat(t.coat.dark), { x: side * 0.16, y: 0.13, z: 0.2 })
+    const brow = mesh(new THREE.BoxGeometry(0.06, 0.014, 0.014), mat(t.coat.dark), { x: side * 0.08, y: 0.1, z: 0.145 })
     brow.visible = false
     head.add(brow)
     parts.brows.push(brow)
   }
-  // tongue for happy
-  const tongue = mesh(new THREE.SphereGeometry(0.04, 8, 6), mat('#e07a8a'), { y: -0.1, z: 0.36 })
-  tongue.scale.set(1, 0.6, 1.4)
+  const tongue = mesh(new THREE.SphereGeometry(0.028, 8, 6), mat('#e07a8a'), { y: -0.095, z: 0.24 })
+  tongue.scale.set(1, 0.6, 1.5)
   tongue.visible = false
   head.add(tongue)
   parts.tongue = tongue
-  // ears
+  // big thin triangular ears, wide apart, rounded tips
   for (const side of [-1, 1]) {
     const ear = new THREE.Group()
-    ear.position.set(side * 0.18, 0.2, -0.04)
+    ear.position.set(side * 0.115, 0.12, -0.04)
     const s = t.ears.size
-    const outer = mesh(new THREE.ConeGeometry(0.15 * s, 0.34 * s, 10), coat, { y: 0.15 * s })
-    outer.scale.x = 1.5
-    const inner = mesh(new THREE.ConeGeometry(0.09 * s, 0.24 * s, 10), mat(PINK), { y: 0.14 * s, z: 0.04 })
-    inner.scale.x = 1.4
+    const outer = mesh(new THREE.ConeGeometry(0.085 * s, 0.22 * s, 12), coat, { y: 0.1 * s })
+    outer.scale.set(1.15, 1, 0.45)
+    const inner = mesh(new THREE.ConeGeometry(0.05 * s, 0.15 * s, 10), mat(PINK), { y: 0.095 * s, z: 0.02 })
+    inner.scale.set(1.1, 1, 0.4)
     inner.castShadow = false
     ear.add(outer, inner)
-    ear.rotation.z = -side * (0.25 + (t.ears.tilt * Math.PI) / 180)
-    if (t.ears.floppy && side === 1) ear.rotation.z = -1.4
+    ear.rotation.z = -side * (0.2 + (t.ears.tilt * Math.PI) / 180)
+    ear.rotation.x = 0.1
+    if (t.ears.floppy && side === 1) ear.rotation.z = -1.35
     head.add(ear)
     parts.ears.push(ear)
   }
   // tail
   const tail = new THREE.Group()
-  tail.position.set(0, BODY_Y + 0.14, -L * 0.62)
+  tail.position.set(0, BODY_Y + 0.1, -L * 0.6)
   body.add(tail)
   parts.tail = tail
-  if (t.tail === 'nub') tail.add(mesh(new THREE.SphereGeometry(0.075, 10, 8), coat))
+  if (t.tail === 'nub') {
+    const nub = mesh(new THREE.CapsuleGeometry(0.045, 0.07, 4, 8), coat, { y: 0.03, z: -0.02 })
+    nub.rotation.x = -0.8
+    tail.add(nub)
+  }
   if (t.tail === 'fluffy') {
-    const f = mesh(new THREE.SphereGeometry(0.13, 12, 10), coat, { y: 0.06, z: -0.06 })
-    f.scale.set(0.9, 1, 1.3)
+    const f = mesh(new THREE.SphereGeometry(0.1, 12, 10), coat, { y: 0.08, z: -0.06 })
+    f.scale.set(0.8, 1, 1.4)
     tail.add(f)
-    tail.add(mesh(new THREE.SphereGeometry(0.07, 8, 6), white, { y: 0.1, z: -0.16 }))
+    tail.add(mesh(new THREE.SphereGeometry(0.05, 8, 6), white, { y: 0.14, z: -0.15 }))
   }
   if (t.tail === 'curled') {
-    const c = mesh(new THREE.TorusGeometry(0.11, 0.05, 8, 14, Math.PI * 1.5), coat, { y: 0.1 })
+    const c = mesh(new THREE.TorusGeometry(0.08, 0.035, 8, 14, Math.PI * 1.5), coat, { y: 0.08 })
     c.rotation.y = Math.PI / 2
     tail.add(c)
   }
   // accessories
   const accent = mat(t.accent, { roughness: 0.6 })
   if (t.accessory === 'collar') {
-    const c = mesh(new THREE.TorusGeometry(0.22, 0.035, 8, 20), accent, { y: BODY_Y + 0.1, z: L * 0.5 })
-    c.rotation.x = Math.PI / 2 - 0.3
+    const c = mesh(new THREE.TorusGeometry(0.15, 0.03, 8, 20), accent, { y: BODY_Y + 0.14, z: L * 0.52 })
+    c.rotation.x = Math.PI / 2 - 0.5
     body.add(c)
-    body.add(mesh(new THREE.SphereGeometry(0.04, 8, 6), mat('#f2c94c', { metalness: 0.6, roughness: 0.3 }), { y: BODY_Y - 0.06, z: L * 0.5 + 0.14 }))
+    body.add(mesh(new THREE.SphereGeometry(0.03, 8, 6), mat('#f2c94c', { metalness: 0.6, roughness: 0.3 }), { y: BODY_Y + 0.02, z: L * 0.52 + 0.14 }))
   }
   if (t.accessory === 'bandana') {
-    const b = mesh(new THREE.ConeGeometry(0.22, 0.26, 3), accent, { y: BODY_Y - 0.08, z: L * 0.55 })
+    const b = mesh(new THREE.ConeGeometry(0.17, 0.2, 3), accent, { y: BODY_Y + 0.02, z: L * 0.56 })
     b.rotation.x = Math.PI
     b.rotation.y = Math.PI
     body.add(b)
   }
   if (t.accessory === 'scarf') {
-    const s = mesh(new THREE.TorusGeometry(0.23, 0.06, 8, 20), accent, { y: BODY_Y + 0.08, z: L * 0.5 })
-    s.rotation.x = Math.PI / 2 - 0.2
+    const s = mesh(new THREE.TorusGeometry(0.16, 0.05, 8, 20), accent, { y: BODY_Y + 0.14, z: L * 0.52 })
+    s.rotation.x = Math.PI / 2 - 0.4
     body.add(s)
-    const tailEnd = mesh(new THREE.BoxGeometry(0.1, 0.3, 0.05), accent, { x: 0.18, y: BODY_Y - 0.1, z: L * 0.52 })
+    const tailEnd = mesh(new THREE.BoxGeometry(0.08, 0.22, 0.04), accent, { x: 0.14, y: BODY_Y, z: L * 0.55 })
     tailEnd.rotation.z = 0.3
     body.add(tailEnd)
   }
   if (t.accessory === 'bow') {
     const bowG = new THREE.Group()
-    bowG.position.set(-0.12, 0.34, 0.02)
-    bowG.add(mesh(new THREE.SphereGeometry(0.06, 8, 6), accent, { x: -0.06 }), mesh(new THREE.SphereGeometry(0.06, 8, 6), accent, { x: 0.06 }), mesh(new THREE.SphereGeometry(0.03, 8, 6), white))
+    bowG.position.set(-0.1, 0.16, -0.02)
+    bowG.add(mesh(new THREE.SphereGeometry(0.045, 8, 6), accent, { x: -0.045 }), mesh(new THREE.SphereGeometry(0.045, 8, 6), accent, { x: 0.045 }), mesh(new THREE.SphereGeometry(0.022, 8, 6), white))
     head.add(bowG)
   }
   if (t.accessory === 'glasses') {
     const frame = mat('#1c1a19', { roughness: 0.3 })
-    for (const side of [-1, 1]) {
-      const ring = mesh(new THREE.TorusGeometry(0.085, 0.012, 6, 16), frame, { x: side * 0.16, y: 0.05, z: 0.2 })
-      head.add(ring)
-    }
-    head.add(mesh(new THREE.BoxGeometry(0.15, 0.012, 0.012), frame, { y: 0.05, z: 0.2 }))
+    for (const side of [-1, 1]) head.add(mesh(new THREE.TorusGeometry(0.055, 0.009, 6, 16), frame, { x: side * 0.08, y: 0.035, z: 0.15 }))
+    head.add(mesh(new THREE.BoxGeometry(0.06, 0.009, 0.009), frame, { y: 0.035, z: 0.15 }))
   }
   if (t.accessory === 'hat') {
-    const brim = mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 16), accent, { y: 0.28 })
-    const top = mesh(new THREE.CylinderGeometry(0.14, 0.15, 0.16, 16), accent, { y: 0.36 })
-    head.add(brim, top)
+    head.add(mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.016, 16), accent, { y: 0.14 }))
+    head.add(mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.13, 16), accent, { y: 0.21 }))
   }
   if (t.accessory === 'flower') {
     const stem = new THREE.Group()
-    stem.position.set(0.16, 0.3, 0.02)
+    stem.position.set(0.11, 0.15, 0.02)
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2
-      stem.add(mesh(new THREE.SphereGeometry(0.035, 6, 6), accent, { x: Math.cos(a) * 0.05, y: Math.sin(a) * 0.05 }))
+      stem.add(mesh(new THREE.SphereGeometry(0.025, 6, 6), accent, { x: Math.cos(a) * 0.035, y: Math.sin(a) * 0.035 }))
     }
-    stem.add(mesh(new THREE.SphereGeometry(0.03, 6, 6), mat('#f2c94c')))
+    stem.add(mesh(new THREE.SphereGeometry(0.02, 6, 6), mat('#f2c94c')))
     head.add(stem)
   }
   if (t.accessory === 'backpack') {
-    const pack = mesh(new THREE.BoxGeometry(0.26, 0.18, 0.2), accent, { y: BODY_Y + 0.24, z: -0.08 })
-    body.add(pack)
-    body.add(mesh(new THREE.BoxGeometry(0.28, 0.06, 0.22), mat(t.accent, { roughness: 0.9 }), { y: BODY_Y + 0.35, z: -0.08 }))
+    body.add(mesh(new THREE.BoxGeometry(0.2, 0.14, 0.16), accent, { y: BODY_Y + 0.2, z: -0.05 }))
+    body.add(mesh(new THREE.BoxGeometry(0.22, 0.05, 0.18), mat(t.accent, { roughness: 0.9 }), { y: BODY_Y + 0.29, z: -0.05 }))
   }
   if (t.accessory === 'crown') {
     const gold = mat('#f2c94c', { metalness: 0.7, roughness: 0.25, emissive: '#b8860b', emissiveIntensity: 0.25 })
-    const band = mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.1, 12), gold, { y: 0.3 })
-    head.add(band)
+    head.add(mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.07, 12), gold, { y: 0.16 }))
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2
-      head.add(mesh(new THREE.ConeGeometry(0.035, 0.09, 6), gold, { x: Math.cos(a) * 0.14, y: 0.39, z: Math.sin(a) * 0.14 }))
+      head.add(mesh(new THREE.ConeGeometry(0.025, 0.06, 6), gold, { x: Math.cos(a) * 0.095, y: 0.22, z: Math.sin(a) * 0.095 }))
     }
   }
 
@@ -677,7 +689,7 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
       // sick: lies down, snout to the floor; critical: flat out, breathing at half speed
       const critical = life === 'critical'
       root.position.y = 0
-      p.body.position.y = critical ? -0.2 : -0.16
+      p.body.position.y = critical ? -0.15 : -0.11
       for (const [i, leg] of p.legs.entries()) leg.rotation.x = i < 2 ? 1.3 : -1.3
       p.head.rotation.x = critical ? 0.75 + Math.sin(now * 0.5) * 0.03 : 0.5 + Math.sin(now * 0.8) * 0.06
       p.body.scale.y = (critical ? 0.7 : 0.88) + Math.sin(now * (critical ? 0.9 : 1.8)) * 0.02
@@ -722,7 +734,7 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     if (moving) {
       tmp.subVectors(brain.target, root.position).setY(0)
       const dist = tmp.length()
-      const stopAt = brain.mode === MODES.greet ? 0.9 : 0.15
+      const stopAt = brain.mode === MODES.greet ? 1.1 * traits.size + 0.3 : 0.15
       if (dist < stopAt) {
         if (brain.mode === MODES.ball && dist < 0.5) {
           ballState.v.copy(tmp).normalize().multiplyScalar(2.5 + brain.random() * 2)
@@ -753,7 +765,7 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
         p.head.rotation.x = -0.1
       } else if (brain.mode === MODES.lie) {
         for (const [i, leg] of p.legs.entries()) leg.rotation.x = i < 2 ? 1.1 : -1.1
-        p.body.position.y = -0.15
+        p.body.position.y = -0.11
         p.head.rotation.x = 0.25 + Math.sin(now * 1.2) * 0.04
       } else if (brain.mode === MODES.sniff) {
         p.body.rotation.x = 0.15
@@ -824,6 +836,36 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     if (r > WANDER_RADIUS + 0.4) { root.position.multiplyScalar((WANDER_RADIUS + 0.4) / r); pickTarget(brain, root.position) }
   }
 
+  /** Corgis are soft capsules on the ground: push overlapping pairs apart and steer walkers around each other. */
+  const sep = new THREE.Vector3()
+  function separateCorgis(dt) {
+    const list = [...corgis.values()].filter((c) => c.role !== 'ghost' && !(c.role === 'mascot' && mascotLife === 'dead'))
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], b = list[j]
+        const minDist = a.traits.size * (0.45 + a.traits.length * 0.35) + b.traits.size * (0.45 + b.traits.length * 0.35)
+        sep.subVectors(b.root.position, a.root.position).setY(0)
+        const d = sep.length()
+        if (d >= minDist || d === 0) continue
+        const push = (minDist - d) * 0.5
+        sep.normalize()
+        a.root.position.addScaledVector(sep, -push)
+        b.root.position.addScaledVector(sep, push)
+        // the one walking into the other picks a new target rather than grinding
+        for (const c of [a, b]) {
+          const moving = c.brain.mode === MODES.walk || c.brain.mode === MODES.ball
+          if (moving && c.brain.random() < 0.05) pickTarget(c.brain, c.root.position)
+          if (c.brain.mode === MODES.greet) { c.brain.mode = MODES.idle; c.brain.timer = 1 + c.brain.random() }
+        }
+      }
+    }
+    // keep everyone inside the fence after being pushed
+    for (const c of list) {
+      const r = Math.hypot(c.root.position.x, c.root.position.z)
+      if (r > WANDER_RADIUS + 0.4) c.root.position.multiplyScalar((WANDER_RADIUS + 0.4) / r)
+    }
+  }
+
   function updateBall(dt) {
     if (ballState.v.lengthSq() < 0.0001 && ball.position.y <= 0.221) return
     ballState.v.y -= 9 * dt
@@ -859,6 +901,7 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
     const now = clock.elapsedTime
     if (!reducedMotion) {
       for (const c of corgis.values()) animateCorgi(c, dt, now)
+      separateCorgis(dt)
       updateBall(dt)
       updateHearts(dt, now)
       if (fireflies.visible) {
