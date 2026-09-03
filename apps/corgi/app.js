@@ -3,9 +3,9 @@
  * renders the playground and the panels. Feeding runs through chain.feed
  * with every stage narrated.
  */
-import { DEFAULT_CONFIG, EPOCHS_PER_DAY, fold } from './fold.js'
+import { DEFAULT_CONFIG, EPOCHS_PER_DAY, RULES_VERSION, fold } from './fold.js'
 import { corgiSvg } from './sprite.js'
-import { describe, rarityOf, traitsOf } from './traits.js'
+import { describe, nameOf, rarityOf, traitsOf } from './traits.js'
 import { createPark } from './park3d.js'
 import * as chain from './chain.js'
 
@@ -108,20 +108,22 @@ function ensurePark() {
 
 const labelEls = new Map()
 function labelText(l) {
-  if (l.role === 'mascot') return 'THE corgi'
-  if (l.role === 'ghost') return 'yours?'
-  return short(l.address)
+  if (l.role === 'mascot') return null
+  if (l.role === 'ghost') return `${nameOf(l.address)}, yours?`
+  return nameOf(l.address)
 }
 function renderLabels(list) {
   const host = $('labels')
   const seen = new Set()
   for (const l of list) {
+    const text = labelText(l)
+    if (text == null) continue
     seen.add(l.key)
     let el = labelEls.get(l.key)
     if (!el) {
       el = document.createElement('span')
       el.className = l.role
-      el.textContent = labelText(l)
+      el.textContent = text
       host.appendChild(el)
       labelEls.set(l.key, el)
     }
@@ -139,10 +141,10 @@ function showTooltip(hit) {
   const rarity = rarityOf(t)
   let who
   if (hit.role === 'mascot') who = `<strong>The FOC corgi</strong>, generation ${view.state.generation}. ${view.state.life}, ${view.state.mood}.`
-  else if (hit.role === 'ghost') who = `<strong>Could be yours.</strong> Feed ${usd(foldConfig.adoptionThreshold)} USDFC or more and this corgi joins the park for good.`
+  else if (hit.role === 'ghost') who = `<strong>${nameOf(hit.address)} could be yours.</strong> Feed ${usd(foldConfig.adoptionThreshold)} USDFC or more and it joins the park for good.`
   else {
     const p = view.state.park.find((x) => x.owner.toLowerCase() === hit.address.toLowerCase())
-    who = `<strong>${short(hit.address)}</strong>'s corgi${p ? `, adopted ${ago(view.clock, p.epoch)}` : ''}.`
+    who = `<strong>${nameOf(hit.address)}</strong>, ${short(hit.address)}'s corgi${p ? `, adopted ${ago(view.clock, p.epoch)}` : ''}.`
   }
   tip.innerHTML = `${who}<br><span class="muted">${describe(t)}${rarity ? ` · ${rarity}` : ''}</span>`
   tip.style.left = `${hit.x}px`
@@ -278,7 +280,7 @@ function renderResidents(s, clock) {
   $('residents').innerHTML = s.park.map((p) => {
     const t = traitsOf(p.owner)
     const rarity = rarityOf(t)
-    return `<article>${corgiSvg(p.owner, { life: 'fine', mood: s.mood, title: describe(t) })}<div><p>${addrLink(p.owner)}${rarity ? ` <span class="badge">${rarity}</span>` : ''}</p><p class="muted">${describe(t)}</p><p class="muted small">adopted ${ago(clock, p.epoch)}</p></div></article>`
+    return `<article>${corgiSvg(p.owner, { life: 'fine', mood: s.mood, title: describe(t) })}<div><p><strong>${nameOf(p.owner)}</strong>${rarity ? ` <span class="badge">${rarity}</span>` : ''}</p><p class="muted">${describe(t)}</p><p class="muted small">${addrLink(p.owner)}, adopted ${ago(clock, p.epoch)}</p></div></article>`
   }).join('')
 }
 
@@ -297,7 +299,7 @@ function renderFeedLog(s, clock, account) {
     if (f.kind === 'withdrawal') {
       return `<tr>${when}<td>${addrLink(s.payer)} <span class="badge">owner withdrew</span></td><td class="num">-${usd(f.amount, 4)}</td><td class="num">${life}</td><td>${txLink(f.txHash)}</td></tr>`
     }
-    const adopt = f.amount >= foldConfig.adoptionThreshold && f.from.toLowerCase() !== s.payer ? ' <span class="badge">adopted a corgi</span>' : ''
+    const adopt = f.amount >= foldConfig.adoptionThreshold && f.from.toLowerCase() !== s.payer ? ` <span class="badge">adopted ${nameOf(f.from)}</span>` : ''
     const self = f.from.toLowerCase() === s.payer ? ' <span class="badge">endowment</span>' : ''
     return `<tr>${when}<td>${addrLink(f.from)} fed it${adopt}${self}</td><td class="num">${usd(f.amount, 4)}</td><td class="num">${life}</td><td>${txLink(f.txHash)}</td></tr>`
   }).join('')
@@ -316,7 +318,7 @@ function renderWall(s, clock) {
 function statusLine(s, clock) {
   if (s.life === 'dead') return `The FOC corgi (gen ${s.generation}) is dead. Its memorial disappears in ${fmtDays(s.memorial.endsInEpochs)}. Anyone can revive it: ${location.href}`
   const left = fmtDays(s.lifeEpochs)
-  return `The FOC corgi is ${s.life} and ${s.mood}: ${left} of life left, ${plural(s.distinctFeeders, 'feeder')} this week, ${plural(s.park.length, 'corgi')} in the park. Feed it or adopt one: ${location.href}`
+  return `The FOC corgi is ${s.life} and ${s.mood}: ${left} of life left, ${plural(s.distinctFeeders, 'feeder')} this week, ${plural(s.park.length, 'corgi')} in the park. Feed it or adopt one: ${location.href} (rules v${RULES_VERSION})`
 }
 
 function render(v) {
@@ -333,7 +335,7 @@ function render(v) {
   $('account-line').textContent = `Account: ${usd(account.funds, 4)} USDFC in Filecoin Pay, ${usd(locked, 4)} of it held as reserve and lockups, spending ${usd(account.ratePerEpoch * BigInt(EPOCHS_PER_DAY), 4)} USDFC a day.`
   $('adopt-threshold').textContent = usd(foldConfig.adoptionThreshold)
   $('feed-title').textContent = s.life === 'dead' ? `Feed it ${usd(s.memorial.reviveNeeds, 4)} USDFC or more to bring it back` : `Feed it ${usd(foldConfig.adoptionThreshold)} USDFC and adopt a corgi`
-  $('contracts-line').textContent = `Filecoin Pay ${net.contracts.filecoinPay.address} · USDFC ${token} · payer ${s.payer}`
+  $('contracts-line').textContent = `rules v${RULES_VERSION} · Filecoin Pay ${net.contracts.filecoinPay.address} · USDFC ${token} · payer ${s.payer}`
   renderLife(s, account); renderMood(s); renderPark(s); renderMemorial(s, clock); renderResidents(s, clock); renderFeedLog(s, clock, account); renderWall(s, clock)
   renderYours()
   renderAmountHint()
@@ -378,9 +380,10 @@ function renderYours() {
   const t = traitsOf(wallet.address)
   const rarity = rarityOf(t)
   const owned = view.state.park.find((p) => p.owner.toLowerCase() === wallet.address.toLowerCase())
+  const name = nameOf(wallet.address)
   const line = owned
-    ? `<p><strong>Your corgi is in the park</strong> (adopted ${ago(view.clock, owned.epoch)}). Every feed still adds days of life.</p>`
-    : `<p><strong>This one is yours</strong> if you feed ${usd(foldConfig.adoptionThreshold)} USDFC or more. It is the see-through one in the park right now.</p>`
+    ? `<p><strong>${name} is in the park</strong> (adopted ${ago(view.clock, owned.epoch)}). Every feed still adds days of life.</p>`
+    : `<p><strong>${name} is yours</strong> if you feed ${usd(foldConfig.adoptionThreshold)} USDFC or more. It is the see-through one in the park right now.</p>`
   box.innerHTML = `${corgiSvg(wallet.address, { life: 'fine', mood: 'happy', title: describe(t) })}<div>${line}<p class="muted small">${describe(t)}${rarity ? ` · ${rarity}` : ''}</p></div>`
   box.hidden = false
 }
@@ -462,7 +465,7 @@ async function submitFeed(ev) {
     })
     const adopted = amount >= foldConfig.adoptionThreshold && view && !view.state.park.some((p) => p.owner.toLowerCase() === wallet.address.toLowerCase())
     const days = daysBought(amount, view?.account.ratePerEpoch ?? 0n)
-    const summary = `Fed ${usd(amount, 4)} USDFC in epoch ${result.epoch}${days ? `, adding ${days.toFixed(1)} days of life` : ''}${adopted ? '. Your corgi is in the park' : ''}. ${txLink(result.hash)}`
+    const summary = `Fed ${usd(amount, 4)} USDFC in epoch ${result.epoch}${days ? `, adding ${days.toFixed(1)} days of life` : ''}${adopted ? `. ${nameOf(wallet.address)} is in the park` : ''}. ${txLink(result.hash)}`
     feedStatus(`${summary}. Waiting for the chain to index it, then refreshing the corgi.`, 'ok')
     park?.celebrate()
     $('stage').scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' })

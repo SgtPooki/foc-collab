@@ -77,6 +77,24 @@ export function traitsOf(address) {
   }
 }
 
+const NAMES = ['Biscuit', 'Pumpkin', 'Waffle', 'Mochi', 'Peanut', 'Noodle', 'Pickle', 'Maple', 'Clover', 'Tater', 'Bagel', 'Nugget',
+  'Pretzel', 'Toffee', 'Cinnamon', 'Butter', 'Dumpling', 'Crumpet', 'Pudding', 'Marmalade', 'Scone', 'Churro', 'Ginger', 'Olive',
+  'Pepper', 'Hazel', 'Rusty', 'Ember', 'Sunny', 'Pebble', 'Acorn', 'Willow', 'Juniper', 'Birch', 'Moss', 'Fern', 'Poppy', 'Daisy',
+  'Tulip', 'Marigold', 'Basil', 'Sage', 'Thyme', 'Nutmeg', 'Cocoa', 'Latte', 'Mocha', 'Espresso', 'Chai', 'Miso', 'Tofu', 'Sushi',
+  'Ramen', 'Gyoza', 'Kimchi', 'Taco', 'Nacho', 'Churro', 'Frito', 'Chip', 'Wiggles', 'Bumble', 'Ziggy', 'Pip', 'Fig', 'Bean',
+  'Sprout', 'Radish', 'Turnip', 'Yam', 'Squash', 'Gourd', 'Melon', 'Kiwi', 'Mango', 'Papaya', 'Guava', 'Plum', 'Peach', 'Cherry',
+  'Berry', 'Bramble', 'Thistle', 'Heather', 'Bracken', 'Dune', 'Cove', 'Reef', 'Tide', 'Comet', 'Nova', 'Pixel', 'Widget', 'Gadget',
+  'Sprocket', 'Bolt', 'Rivet', 'Cog', 'Pistachio', 'Almond', 'Cashew', 'Pecan', 'Walnut', 'Truffle', 'Brie', 'Gouda', 'Cheddar',
+  'Feta', 'Ricotta', 'Paneer', 'Halloumi', 'Colby', 'Havarti', 'Muenster', 'Stilton', 'Roquefort', 'Wensley', 'Boo', 'Ollie', 'Winston']
+const EPITHETS = ['', '', '', ' the Brave', ' the Snoot', ' Jr.', ' the Loaf', ' Fluffington', ' von Sploot', ' the Round', ' McBiscuit', ' the Zoomer']
+
+/** A pet name from the address, stable forever for the same owner. */
+export function nameOf(address) {
+  const b = bytesOf(address)
+  const first = NAMES[(b[17] * 256 + b[18]) % NAMES.length]
+  return `${first}${EPITHETS[b[19] % EPITHETS.length]}`
+}
+
 /** Rarity label for the collectors: 'rare' for crown or odd eyes, else null. */
 export function rarityOf(t) {
   if (t.accessory === 'crown' && t.oddEye) return 'legendary'

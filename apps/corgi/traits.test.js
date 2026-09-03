@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { describe, traitsOf } from './traits.js'
+import { describe, nameOf, traitsOf } from './traits.js'
 
 test('traits are deterministic and bounded', () => {
   const a = traitsOf('0xd677eFcD0Ae24e42FD74B9865C16f3fDaBC82492')
@@ -18,4 +18,17 @@ test('address space spreads across coats, patterns, and accessories', () => {
     coats.add(t.coat.name); patterns.add(t.pattern); acc.add(t.accessory)
   }
   assert.ok(coats.size >= 8 && patterns.size >= 6 && acc.size >= 8)
+})
+
+// Adopted corgis are a contract with their owners: these descriptions must
+// never change. Add a line for every real adopter before touching traits.js.
+test('real adopters keep their corgi across versions', () => {
+  const pins = [
+    // first calibration adopter, 2026-09-03, feed tx 0xf614a98c…
+    ['0x44f08D1beFe61255b3C3A349C392C560FA333759', 'big saddle white corgi with a bandana, energetic'],
+    // the test feeder wallet
+    ['0xd677eFcD0Ae24e42FD74B9865C16f3fDaBC82492', 'big saddle cream corgi with a bow, curious'],
+  ]
+  for (const [address, expected] of pins) assert.equal(describe(traitsOf(address)), expected)
+  assert.equal(nameOf('0x44f08D1beFe61255b3C3A349C392C560FA333759'), 'Willow Jr.')
 })

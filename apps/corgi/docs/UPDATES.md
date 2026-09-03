@@ -81,8 +81,8 @@ pointer is the durable one.
 
 ## Work items
 
-- [ ] `rulesVersion` in `DEFAULT_CONFIG`, shown in the footer and share line.
-- [ ] Fixture test pinning `traitsOf` for the addresses that have adopted so far.
+- [x] `rulesVersion` in `DEFAULT_CONFIG`, shown in the footer and share line.
+- [x] Fixture test pinning `traitsOf` for the addresses that have adopted so far (`traits.test.js`).
 - [ ] Publish a manifest piece per release and read it back from the data set; show the "newer park" signpost when the served root is stale.
 - [ ] Bump the localStorage schema tag on any cache shape change (checklist item in the publish skill).
 - [ ] Decide on a DNSLink name.

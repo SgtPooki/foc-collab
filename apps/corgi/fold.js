@@ -29,7 +29,10 @@
 export const EPOCHS_PER_DAY = 2880 // synapse-core/src/utils/constants.ts:18
 export const LOCKUP_PERIOD_EPOCHS = 30 * EPOCHS_PER_DAY // PriceListUSDFC.sol DEFAULT_LOCKUP_PERIOD
 
+export const RULES_VERSION = 1
+
 export const DEFAULT_CONFIG = Object.freeze({
+  rulesVersion: RULES_VERSION,
   // death is declared while runway remains so the memorial is viewable
   deathDays: 7,
   // life thresholds in days of runway (deficit point), evaluated top-down;

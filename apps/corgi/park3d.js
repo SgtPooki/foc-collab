@@ -152,7 +152,7 @@ export function buildCorgi(traits) {
   parts.eyes = []
   for (const side of [-1, 1]) {
     const colour = side === 1 && t.oddEye ? t.oddEye : t.eyes
-    const eye = mesh(new THREE.SphereGeometry(0.055, 12, 10), mat(colour, { roughness: 0.3 }), { x: side * 0.16, y: 0.05, z: 0.17 })
+    const eye = mesh(new THREE.SphereGeometry(0.055, 12, 10), mat(colour, { roughness: 0.3 }), { x: side * 0.155, y: 0.05, z: 0.155 })
     const shine = mesh(new THREE.SphereGeometry(0.018, 6, 6), glint, { x: side * 0.15 + 0.015, y: 0.07, z: 0.215 })
     head.add(eye, shine)
     parts.eyes.push(eye)
@@ -326,7 +326,12 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
   controls.enableDamping = true
   controls.autoRotate = !reducedMotion
   controls.autoRotateSpeed = 0.35
-  controls.addEventListener('start', () => { controls.autoRotate = false })
+  let idleTimer = 0
+  controls.addEventListener('start', () => {
+    controls.autoRotate = false
+    clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => { if (!reducedMotion) controls.autoRotate = true }, 20_000)
+  })
 
   // lights
   const hemi = new THREE.HemisphereLight('#ffffff', '#4d6b3a', 0.9)
@@ -345,7 +350,25 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
   scene.add(hemi, sun, lamp, moon)
 
   // ground and props
-  const grass = mat('#6fae5a')
+  function grassTexture() {
+    const size = 256
+    const cv = document.createElement('canvas')
+    cv.width = size; cv.height = size
+    const ctx = cv.getContext('2d')
+    const noise = rng(4242)
+    const img = ctx.createImageData(size, size)
+    for (let i = 0; i < size * size; i++) {
+      const n = 0.86 + noise() * 0.28
+      img.data[i * 4] = 111 * n; img.data[i * 4 + 1] = 174 * n; img.data[i * 4 + 2] = 90 * n; img.data[i * 4 + 3] = 255
+    }
+    ctx.putImageData(img, 0, 0)
+    const tex = new THREE.CanvasTexture(cv)
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(10, 10)
+    tex.colorSpace = THREE.SRGBColorSpace
+    return tex
+  }
+  const grass = new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95, metalness: 0 })
   const ground = mesh(new THREE.CircleGeometry(GROUND_RADIUS, 48), grass, { castShadow: false })
   ground.rotation.x = -Math.PI / 2
   ground.receiveShadow = true
@@ -534,8 +557,8 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
       pickTarget(brain, root.position)
     }
     if (role === 'ghost') {
-      root.position.set(-1.7, 0, 2.6)
-      brain.heading = 0.4
+      root.position.set(-2.3, 0, 1.2)
+      brain.heading = 0.6
       root.traverse((o) => {
         if (!o.isMesh) return
         o.material = o.material.clone()
@@ -570,12 +593,12 @@ export function createPark(canvas, { reducedMotion = false, onPick = null, onHov
   function applyTheme(next) {
     theme = next
     const night = theme === 'dark'
-    scene.background = new THREE.Color(night ? '#141a26' : '#cfe6f6')
+    scene.background = new THREE.Color(night ? '#1b2436' : '#cfe6f6')
     scene.fog = new THREE.Fog(scene.background, 14, 34)
-    hemi.intensity = night ? 0.55 : 0.9
+    hemi.intensity = night ? 1.3 : 0.9
     hemi.color.set(night ? '#8fa3d1' : '#ffffff')
-    moon.intensity = night ? 0.6 : 0
-    sun.intensity = night ? 0.7 : 2.2
+    moon.intensity = night ? 1.6 : 0
+    sun.intensity = night ? 0.9 : 2.2
     sun.color.set(night ? '#9fb4ff' : '#fff4de')
     sun.shadow.intensity = night ? 0.55 : 0.75
     lamp.intensity = night ? 28 : 0
