@@ -33,6 +33,9 @@ all state is a deterministic fold over the piece log in piece-id order.
     fresh funded wallet becomes a player from the page through a fake
     EIP-1193 provider (deposit, session key, data set), then creates a game
   - `docs/BYOW-PLAYERS.md` — what a teammate does to play with their wallet
+- `node scripts/build-site.mjs [dir]` — landing page + every game as a
+  self-contained BYOW page (`site/`); `.github/workflows/pages.yml` deploys
+  it to GitHub Pages on push to main once Pages is enabled for the repo
 - Publish via the `publish` skill (`.claude/skills/publish/SKILL.md`);
   always source `config.env` + `.env` before any filecoin-pin command
 

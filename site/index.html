@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>foc-collab games</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --accent: #2f6fed; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: start center; min-height: 100vh; }
+  main { padding: 2rem 1rem; max-width: 40rem; }
+  h1 { font-size: 1.3rem; font-weight: 600; }
+  h2 { font-size: 1rem; margin: 1.6rem 0 0.4rem; }
+  a { color: var(--accent); }
+  .meta { font-size: 0.85rem; opacity: 0.75; }
+  ul { padding-left: 1.2rem; }
+  li { margin: 0.5rem 0; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; margin: 0.8rem 0; }
+  .card h3 { margin: 0 0 0.3rem; font-size: 1rem; }
+  .tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Games with no server</h1>
+  <p class="meta">Every game here runs in your browser with Filecoin Onchain Cloud as the
+  only backend. Moves are signed JSON pieces in data sets; boards are a
+  deterministic fold over them. No server, no database, nothing to take down.</p>
+
+  <div class="card">
+    <h3><a href="./tic-tac-toe/">tic-tac-toe</a> <span class="tag">bring your own wallet</span></h3>
+    <p class="meta">Two players, two wallets, two data sets. Connect a wallet on Filecoin
+    calibration once (about three minutes and three or four signatures); after that a
+    short-lived AddPieces-only session key signs your moves. Your opponent is found
+    from chain events, so the page carries no key of anyone's. Anyone with an invite
+    link can watch without a wallet. Moves settle in about a minute.</p>
+  </div>
+
+  <h2>How to play</h2>
+  <ul>
+    <li>Get a browser wallet with a calibration account holding a little tFIL and at
+    least 5 USDFC: <a href="https://faucet.calibnet.chainsafe-fil.io/">tFIL faucet</a>,
+    <a href="https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc">USDFC faucet</a>.</li>
+    <li>Open a game, press "connect wallet to play", approve the prompts.</li>
+    <li>Create a game and share the link, or open a link you were sent and join.</li>
+  </ul>
+
+  <h2>Under the hood</h2>
+  <ul class="meta">
+    <li>Your wallet pays for your own writes; the other player pays for theirs.</li>
+    <li>Ordering across data sets uses only the chain-assigned piece id inside each
+    author's own data set plus signed hash links, so nobody can steal a seat or take a
+    move back after the reply.</li>
+    <li>Discovery reads PieceAdded events from the chain; no lobby server, no publisher key.</li>
+  </ul>
+</main>
+</body>
+</html>
