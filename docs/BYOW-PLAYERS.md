@@ -1,5 +1,12 @@
 # Play tic-tac-toe with your own wallet
 
+Published 2026-09-10 (calibration):
+https://bafybeic2oh2yeljyhmmve55zvyvdcvuw5tnghqpiw6omka23kbonwe7r2a.ipfs.inbrowser.link/
+(root CID `bafybeic2oh2yeljyhmmve55zvyvdcvuw5tnghqpiw6omka23kbonwe7r2a`, also at
+`https://<cid>.ipfs.dweb.link/`). Note that filecoin-pin 2.0.1 fails on
+directory adds ("pieceSizes must contain only positive byte sizes");
+publish with `npx filecoin-pin@1.3.1 add dist/byow`.
+
 The published page has no backend and no key of anyone's in it. You bring
 a Filecoin calibration wallet; your moves are pieces in a data set that
 your wallet pays for; your opponent's moves are in theirs; both pages

@@ -49,8 +49,10 @@ joiner and names the joiner's data set, so anyone with the link can
 reconstruct the game from Filecoin Onchain Cloud alone. Design, threat
 model, and the proof ladder: `research/2026-09-10-byow-proof-plan.md`.
 Runnable proofs: `npm run proof:byow` (node, two wallets) and
-`npm run test:e2e:byow` (two browser contexts). Setup steps are in
-`AGENTS.md`.
+`npm run test:e2e:byow` (two browser contexts). Opponents are discovered
+from PieceAdded chain events, so the page carries no key. Setup steps
+are in `AGENTS.md`; the player guide and published URL are in
+`docs/BYOW-PLAYERS.md`.
 
 ## Setup for the storage-backed pieces
 
