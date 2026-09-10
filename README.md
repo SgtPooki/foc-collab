@@ -38,6 +38,20 @@ The published (shared-storage) build is the same page with an embedded
 `foc-config` JSON block naming the shared data set — no query-param
 configuration; the only URL parameter is `?game=<id>` in invite links.
 
+## Bring your own wallet (BYOW)
+
+The same page has a second mode where there is no shared log at all. Each
+player has their own wallet, pays for their own writes, and appends only to
+their own data set; both clients read both data sets keylessly and fold
+with the schema v2 rules in `games/tic-tac-toe/fold-byow.js`. The invite
+link is `?game=<id>&x=<root data set>`; the creator's first move seats the
+joiner and names the joiner's data set, so anyone with the link can
+reconstruct the game from Filecoin Onchain Cloud alone. Design, threat
+model, and the proof ladder: `research/2026-09-10-byow-proof-plan.md`.
+Runnable proofs: `npm run proof:byow` (node, two wallets) and
+`npm run test:e2e:byow` (two browser contexts). Setup steps are in
+`AGENTS.md`.
+
 ## Setup for the storage-backed pieces
 
 Copy `.env.example` to `.env` and set `PRIVATE_KEY` (gitignored). Runtime

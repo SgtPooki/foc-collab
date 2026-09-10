@@ -16,7 +16,7 @@
   #board button { height: 84px; font-size: 2.2rem; border-radius: 10px; }
   #board button.pending { opacity: 0.55; animation: pulse 1.1s ease-in-out infinite; border-color: var(--accent); }
   #board button.last { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  #status.error { color: #e5534b; }
+  #status.error, #byow-meta.error { color: #e5534b; }
   #status.busy::after, #status.waiting::after {
     content: ''; display: inline-block; width: 1.2em; text-align: left;
     animation: dots 1.5s steps(4, end) infinite;
@@ -60,17 +60,20 @@
       <a href="?">← lobby</a>
       <button id="share">copy invite link</button>
       <button id="join" hidden>join as O</button>
+      <button id="link-back" hidden>copy link for X</button>
       <button id="rematch" hidden>rematch</button>
       <button id="notify" hidden>🔔 notify me on my turn</button>
     </div>
     <div id="board"></div>
     <p id="status"></p>
     <p class="meta" id="log-info"></p>
+    <p class="meta" id="byow-meta" hidden></p>
   </section>
 </main>
 
 <script type="module">
 import { fold, lobby, seatOf, status } from './fold.js'
+import { dataSetsOf, foldByow, lobbyByow } from './fold-byow.js'
 import { loadIdentity, signPiece, verifyAll } from './identity.js'
 import { createTransport } from './transport.js'
 
@@ -110,6 +113,18 @@ const params = new URLSearchParams(location.search)
 const gameId = params.get('game')
 const $ = (id) => document.getElementById(id)
 
+// BYOW (schema v2): each player writes to their own data set; a game is
+// (game id, root data set) and the invite link carries both. The fold
+// follows the seat-owner sequencing rules in fold-byow.js. Otherwise the
+// page is the v1 single-shared-log game.
+const byow = typeof transport.addDataSet === 'function'
+const V = byow ? 2 : 1
+const root = byow ? (params.get('x') ?? transport.me?.ds ?? null) : null
+if (byow && params.get('o')) transport.addDataSet(params.get('o'))
+const foldGame = (pieces) => (byow ? foldByow(gameId, root, pieces) : fold(gameId, pieces))
+const foldLobby = (pieces) => (byow ? lobbyByow(pieces) : lobby(pieces))
+const gameHref = (g) => (byow ? `?game=${encodeURIComponent(g.game)}&x=${encodeURIComponent(g.root)}` : `?game=${encodeURIComponent(g.game)}`)
+
 let pieces = []
 let busy = null // label of the in-flight append, e.g. 'placing your X'
 let busyStage = null // transport progress: uploading / stored / submitted
@@ -135,11 +150,14 @@ function renderLobby() {
   const create = $('create')
   create.disabled = busy != null
   create.textContent = busy ?? 'create a game'
-  const games = lobby(pieces)
+  const games = foldLobby(pieces)
   $('lobby-empty').hidden = games.length > 0
-  const mine = games.filter((g) => seatOf(g, token) != null)
-  const open = games.filter((g) => seatOf(g, token) == null && g.seats.O == null)
-  const rest = games.filter((g) => seatOf(g, token) == null && g.seats.O != null)
+  const joined = (g) => seatOf(g, token) != null || (g.joins ?? []).some((j) => j.token === token)
+  const mine = games.filter((g) => joined(g))
+  const open = games.filter((g) => !joined(g) && g.seats.O == null)
+  const rest = games.filter((g) => !joined(g) && g.seats.O != null)
+  create.disabled = busy != null || (byow && transport.me == null)
+  if (byow && transport.me == null) create.textContent = 'spectating: paste a player descriptor to play'
   $('games').replaceChildren(
     ...lobbySection('your games', mine),
     ...lobbySection('open to join', open.slice(0, 15), open.length),
@@ -163,7 +181,7 @@ function lobbyRow(g) {
     li.classList.add('your-turn')
   }
   const a = document.createElement('a')
-  a.href = `?game=${encodeURIComponent(g.game)}`
+  a.href = gameHref(g)
   a.textContent = g.name ?? g.game
   const span = document.createElement('span')
   span.className = 'meta'
@@ -174,12 +192,18 @@ function lobbyRow(g) {
 
 function renderGame() {
   $('game').hidden = false
-  const state = fold(gameId, pieces)
+  const state = foldGame(pieces)
   const seat = seatOf(state, token)
-  const joinable = seat == null && state.seats.X != null && state.seats.O == null
+  const iJoined = byow && (state.joins ?? []).some((j) => j.token === token)
+  const joinable = seat == null && state.seats.X != null && state.seats.O == null && !iJoined
+    && (!byow || transport.me != null)
   const join = $('join')
   join.hidden = !joinable
   join.disabled = busy != null
+  // v2: X's first move ratifies the first joiner. Until then O is a candidate.
+  const ratifying = byow && seat === 'X' && !state.ratified && state.joins.length > 0
+  const playable = state.seats.O != null || ratifying
+  renderByowMeta(state, seat, iJoined)
   $('rematch').hidden = !(state.winner != null && seat != null && busy == null)
   $('notify').hidden = !('Notification' in window) || Notification.permission !== 'default'
     || seat == null || state.winner != null
@@ -187,7 +211,7 @@ function renderGame() {
     const b = document.createElement('button')
     b.textContent = cell ?? ''
     b.disabled = busy != null || pendingMove != null || cell != null
-      || state.winner != null || seat !== state.next || state.seats.O == null
+      || state.winner != null || seat !== state.next || !playable
     if (pendingMove != null && pendingMove.cell === i && cell == null) {
       b.textContent = pendingMove.seat
       b.classList.add('pending')
@@ -196,14 +220,14 @@ function renderGame() {
       b.classList.add('last')
     }
     b.onclick = () => append(
-      { v: 1, type: 'move', game: gameId, seq: state.seq, cell: i },
-      `placing your ${seat}`,
+      movePayload(state, i, ratifying),
+      ratifying ? `ratifying ${state.joins[0].token.slice(0, 8)}… as O, placing your X` : `placing your ${seat}`,
       { cell: i, seat, sentAt: Date.now() },
     )
     return b
   }))
   const yourTurn = seat != null && seat === state.next && state.winner == null
-    && state.seats.O != null && busy == null && pendingMove == null
+    && playable && busy == null && pendingMove == null
   document.title = yourTurn ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
   if (yourTurn && state.seq !== lastNotifiedSeq && document.hidden
     && 'Notification' in window && Notification.permission === 'granted') {
@@ -211,7 +235,7 @@ function renderGame() {
     new Notification('your move — tic-tac-toe', { body: status(state) })
   }
   const statusEl = $('status')
-  statusEl.textContent = statusLine(state, seat, joinable)
+  statusEl.textContent = statusLine(state, seat, joinable, ratifying, iJoined)
   statusEl.classList.toggle('error', busy == null && lastError != null)
   statusEl.classList.toggle('busy', busy != null)
   const waitingOnOpponent = busy == null && lastError == null && state.winner == null
@@ -220,7 +244,36 @@ function renderGame() {
   $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
 }
 
-function statusLine(state, seat, joinable) {
+function movePayload(state, cell, ratifying) {
+  if (!byow) return { v: 1, type: 'move', game: gameId, seq: state.seq, cell }
+  const move = { v: 2, type: 'move', game: gameId, seq: state.seq, prev: state.lastRef, cell }
+  if (!ratifying) return move
+  const join = state.joins[0]
+  return { ...move, prev: join.ref, o: { token: join.token, ds: join.ds } }
+}
+
+// BYOW-only affordances: which data sets this board is folded from, read
+// problems, disputes (a piece vanished from its data set), and the
+// link-back O needs when no rendezvous data set is configured.
+function renderByowMeta(state, seat, iJoined) {
+  const meta = $('byow-meta')
+  if (!byow) return
+  meta.hidden = false
+  const sets = dataSetsOf(state)
+  for (const ds of sets) transport.addDataSet(ds)
+  const problems = transport.problems()
+  const disputes = transport.disputes()
+  const lines = [`folded from data set${sets.length === 1 ? '' : 's'} ${sets.map((d) => `#${d}`).join(', ')}`]
+  if (state.homes.O != null) lines.push(`X writes to #${state.homes.X}, O writes to #${state.homes.O}`)
+  if (problems.length > 0) lines.push(`cannot read ${problems.map((p) => `#${p.ds} (${p.error})`).join('; ')} — showing last known pieces`)
+  if (disputes.length > 0) lines.push(`DISPUTED: ${disputes.length} piece(s) were removed from their data set after this browser saw them; the board keeps them`)
+  meta.textContent = lines.join('. ')
+  meta.classList.toggle('error', problems.length > 0 || disputes.length > 0)
+  const back = $('link-back')
+  back.hidden = !(iJoined && !state.ratified && transport.rendezvous == null)
+}
+
+function statusLine(state, seat, joinable, ratifying = false, iJoined = false) {
   if (busy != null && busyStage != null) return `${busy} — ${busyStage}`
   if (busy != null) return `${busy}`
   if (pendingMove != null) {
@@ -229,6 +282,8 @@ function statusLine(state, seat, joinable) {
     return 'move sent — finalizing on-chain'
   }
   if (lastError != null) return lastError
+  if (ratifying) return `${state.joins.length} joined — your first move seats the first joiner as O`
+  if (iJoined && !state.ratified) return 'you joined — X seats you with their first move'
   if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
     return `${status(state)} — you are ${seat}, waiting for your opponent`
   }
@@ -250,15 +305,27 @@ async function verifiedPieces(raw) {
     if (p == null || typeof p !== 'object') return null
     const ok = verdicts.get(p)
     if (ok == null) return null
-    // Domain separation: only pieces signed for this app and this log count.
-    return ok.app === APP && ok.log === transport.logId ? ok : null
+    if (ok.app !== APP) return null
+    // Domain separation. v1: one shared log, so the log id must match this
+    // transport's. v2: every piece names its home data set and the fold
+    // checks it against where the piece was read from.
+    if (!byow) return ok.log === transport.logId ? ok : null
+    if (ok.v !== 2) return null
+    if (ok.type === 'announce' && typeof ok.ds === 'string' && typeof ok.root === 'string'
+      && ok.log === transport.rendezvousLog && ok.src === transport.rendezvous?.ds) {
+      // Discovery only: a player announced their data set for a game.
+      if (gameId == null || (ok.game === gameId && ok.root === root)) transport.addDataSet(ok.ds)
+      if (gameId == null) transport.addDataSet(ok.root)
+      return null
+    }
+    return ok
   })
 }
 
 async function refresh() {
   pieces = await verifiedPieces(await transport.list())
   if (gameId != null && pendingMove != null) {
-    const board = fold(gameId, pieces).board
+    const board = foldGame(pieces).board
     const landed = board[pendingMove.cell]
     if (landed === pendingMove.seat) {
       pendingMove = null
@@ -272,7 +339,7 @@ async function refresh() {
   }
   if (gameId != null) {
     const oldBoard = prevSnapshot
-    const newBoard = fold(gameId, pieces).board
+    const newBoard = foldGame(pieces).board
     if (oldBoard != null && oldBoard.some((cell, i) => cell !== newBoard[i])) prevBoard = oldBoard
     prevSnapshot = newBoard
   }
@@ -309,10 +376,33 @@ async function append(payload, label, move = null) {
   }
 }
 
+async function announce(game, gameRoot) {
+  if (!byow || transport.rendezvous == null) return
+  busy = 'announcing in the lobby'
+  render()
+  try {
+    const signed = await signPiece(
+      { v: 2, app: APP, log: transport.rendezvousLog, type: 'announce', game, root: gameRoot, ds: transport.me.ds, role: 'player' },
+      identity,
+    )
+    await transport.announce(signed, (stage) => { busyStage = stage; render() })
+  } catch (err) {
+    console.error(err)
+    lastError = `announced nothing (${err?.message?.slice(0, 120) ?? err}) — share the invite link by hand`
+  }
+  busy = null
+  busyStage = null
+  render()
+}
+
 function newGame(name) {
   const game = `game-${crypto.randomUUID()}`
-  return append({ v: 1, type: 'create', game, name }, 'creating game')
-    .then((ok) => { if (ok) location.search = `?game=${encodeURIComponent(game)}` })
+  return append({ v: V, type: 'create', game, name }, 'creating game')
+    .then(async (ok) => {
+      if (!ok) return
+      if (byow) await announce(game, transport.me.ds)
+      location.search = byow ? `?game=${encodeURIComponent(game)}&x=${encodeURIComponent(transport.me.ds)}` : `?game=${encodeURIComponent(game)}`
+    })
 }
 
 $('create').onclick = () => {
@@ -320,7 +410,19 @@ $('create').onclick = () => {
   newGame(name)
 }
 
-$('join').onclick = () => append({ v: 1, type: 'join', game: gameId }, 'joining as O')
+$('join').onclick = async () => {
+  const state = foldGame(pieces)
+  const payload = byow ? { v: 2, type: 'join', game: gameId, prev: state.lastRef } : { v: 1, type: 'join', game: gameId }
+  if (await append(payload, 'joining as O')) await announce(gameId, root)
+}
+
+$('link-back').onclick = async () => {
+  const url = new URL(location.href)
+  url.searchParams.set('o', transport.me.ds)
+  await navigator.clipboard.writeText(url.toString())
+  $('link-back').textContent = 'copied!'
+  setTimeout(() => { $('link-back').textContent = 'copy link for X' }, 1500)
+}
 
 $('rematch').onclick = () => newGame('rematch')
 
@@ -339,7 +441,7 @@ $('share').onclick = async () => {
 // lobby or on finished games. The countdown re-renders once a second.
 function pollDelay() {
   if (gameId == null) return 12000
-  const state = fold(gameId, pieces)
+  const state = foldGame(pieces)
   if (state.winner != null) return 20000
   return 4000
 }

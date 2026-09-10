@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { fold, seatOf } from './fold.js'
-import { canon, generateIdentity, signPiece, verifyAll, verifyPiece } from './identity.js'
+import { canon, generateIdentity, pieceRef, signPiece, verifyAll, verifyPiece } from './identity.js'
 
 test('canon is order-insensitive and drops undefined', () => {
   assert.equal(canon({ b: 1, a: [2, { d: 3, c: 4 }], e: undefined }), canon({ a: [2, { c: 4, d: 3 }], b: 1 }))
@@ -50,4 +50,17 @@ test('end to end: a spying game-4 player cannot take over game 1', async () => {
   assert.equal(state.board[4], 'X')
   assert.equal(state.board[0], null) // none of mallory's attempts landed
   assert.equal(fold('g4-clone', await verifyAll(log)).seats.X, null) // replay died in verification
+})
+
+test('transport annotations (src, pieceId) and ref are outside the signature; signing them in fails', async () => {
+  const alice = await generateIdentity()
+  const piece = await signPiece({ v: 2, type: 'move', game: 'g', seq: 0, cell: 4, prev: 'p' }, alice)
+  const annotated = { ...piece, src: '100', pieceId: 7n }
+  assert.equal(await verifyPiece(annotated), true)
+  assert.equal(await pieceRef(annotated), await pieceRef(piece), 'ref ignores annotations')
+  const [verified] = await verifyAll([annotated])
+  assert.equal(verified.src, '100')
+  assert.equal(verified.ref, await pieceRef(piece))
+  const smuggled = await signPiece({ ...piece, src: '999' }, alice) // author signs a src field
+  assert.equal(await verifyPiece(smuggled), false)
 })

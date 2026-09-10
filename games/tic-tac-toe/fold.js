@@ -35,7 +35,7 @@ export function initialState(game) {
   }
 }
 
-function winnerOf(board) {
+export function winnerOf(board) {
   for (const [a, b, c] of LINES) {
     if (board[a] != null && board[a] === board[b] && board[a] === board[c]) return board[a]
   }

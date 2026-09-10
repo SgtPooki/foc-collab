@@ -60,8 +60,41 @@ export function pageConfig() {
   }
 }
 
+/**
+ * BYOW: the page config carries only publisher-level settings
+ * ({ mode: 'byow', rendezvous? }); each player's own descriptor
+ * ({ ds, wallet, sessionKey } from scripts/byow-setup-player.mjs) is pasted
+ * once and kept in localStorage, never in a URL or in the page. Without a
+ * descriptor the page is a read-only spectator.
+ */
+const ME_KEY = 'ttt:byow:me'
+
+export function loadMyDescriptor() {
+  try {
+    const me = JSON.parse(localStorage.getItem(ME_KEY) ?? 'null')
+    if (me?.ds && me?.wallet && me?.sessionKey) return me
+  } catch { /* fall through to prompt */ }
+  return null
+}
+
+export function promptMyDescriptor() {
+  const raw = prompt('Paste your player descriptor JSON ({ ds, wallet, sessionKey }; stays in this browser). Cancel to spectate:')
+  if (!raw) return null
+  const me = JSON.parse(raw)
+  if (!me?.ds || !me?.wallet || !me?.sessionKey) throw new Error('descriptor needs ds, wallet, sessionKey')
+  localStorage.setItem(ME_KEY, JSON.stringify(me))
+  return me
+}
+
 export async function createTransport() {
   const config = pageConfig()
+  const params = new URLSearchParams(location.search)
+  if (config?.mode === 'byow' || params.get('transport') === 'byow') {
+    const { createByowTransport } = await import('./transport-byow.js')
+    const me = loadMyDescriptor() ?? promptMyDescriptor()
+    const peers = ['x', 'o'].map((k) => params.get(k)).filter((v) => v != null && v !== '')
+    return createByowTransport({ me, peers, rendezvous: config?.rendezvous ?? null })
+  }
   if (config == null) return localTransport()
   const { createFocTransport } = await import('./transport-foc.js')
   return createFocTransport(config)

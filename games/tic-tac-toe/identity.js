@@ -32,6 +32,26 @@ export function canon(value) {
   return JSON.stringify(value)
 }
 
+/**
+ * Fields that ride on a piece but were never signed: the signature itself,
+ * and the annotations a transport (src, pieceId, removed) or verification (ref)
+ * attach after the author is done. Stripped before verifying and hashing,
+ * so an author who tries to sign them in gets a piece that never verifies.
+ */
+const UNSIGNED = ['sig', 'ref', 'src', 'pieceId', 'removed']
+
+export function signedBody(piece) {
+  const body = { ...piece }
+  for (const key of UNSIGNED) delete body[key]
+  return body
+}
+
+/** Content address of the signed body: what a successor's `prev` commits to. */
+export async function pieceRef(piece) {
+  const digest = await subtle.digest('SHA-256', new TextEncoder().encode(canon(signedBody(piece))))
+  return `sha256:${toB64u(digest)}`
+}
+
 export async function generateIdentity() {
   // Non-extractable: the private key can sign but its material can never
   // be read back out by script (the public key is always exportable).
@@ -84,7 +104,8 @@ export async function signPiece(payload, identity) {
 /** True when the piece's signature verifies against its own token. */
 export async function verifyPiece(piece) {
   if (piece == null || typeof piece !== 'object') return false
-  const { sig, ...body } = piece
+  const { sig } = piece
+  const body = signedBody(piece)
   if (typeof sig !== 'string' || typeof piece.token !== 'string') return false
   try {
     const publicKey = await subtle.importKey('raw', fromB64u(piece.token), ALG, false, ['verify'])
@@ -97,8 +118,12 @@ export async function verifyPiece(piece) {
 /**
  * Maps forged/unsigned pieces to null (which the fold ignores) so the log
  * that reaches the fold contains only pieces provably authored by their
- * token. Runs between transport.list() and the fold; the fold stays pure.
+ * token, each annotated with its `ref`. Runs between transport.list() and
+ * the fold; the fold stays pure.
  */
 export async function verifyAll(pieces) {
-  return Promise.all(pieces.map(async (p) => ((await verifyPiece(p)) ? p : null)))
+  return Promise.all(pieces.map(async (p) => {
+    if (!(await verifyPiece(p))) return null
+    return { ...p, ref: await pieceRef(p) }
+  }))
 }
