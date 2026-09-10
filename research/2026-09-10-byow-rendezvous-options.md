@@ -154,7 +154,15 @@ does not exist yet: an SDK hook to supply a custom signature below
 `ctx.upload`, and a measured gas cost for P-256 recovery on FEVM. Start
 with secp256k1 in the authorizer to prove the write path, then add P-256.
 
-## Recommendation
+## Built (same day)
+
+Option A shipped: `discover.js` (pure tags, chunked scan with halving,
+checkpoints), tagged create and join uploads, `&from=<block>` in the
+invite, link-back kept as fallback with O's own URL rewritten to carry
+`&o=`, rendezvous config and announce pieces removed. The page carries
+no key. Results of the live runs are in `2026-09-10-byow-proof-plan.md`.
+
+## Recommendation (as written before building)
 
 Demo next week, no publisher wallet, no key in the page:
 

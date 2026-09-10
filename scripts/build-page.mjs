@@ -32,7 +32,7 @@ execFileSync('npx', [
   `--outfile=${path.join(outDir, 'vendor-foc.js')}`,
 ], { cwd: root, stdio: 'inherit' })
 
-for (const f of ['index.html', 'fold.js', 'fold-byow.js', 'identity.js', 'transport.js', 'transport-foc.js']) {
+for (const f of ['index.html', 'fold.js', 'fold-byow.js', 'discover.js', 'identity.js', 'transport.js', 'transport-foc.js']) {
   fs.copyFileSync(path.join(src, f), path.join(outDir, f))
 }
 // The BYOW transport is shared with node (proof scripts import it straight

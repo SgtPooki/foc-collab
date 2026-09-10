@@ -61,8 +61,8 @@ export function pageConfig() {
 }
 
 /**
- * BYOW: the page config carries only publisher-level settings
- * ({ mode: 'byow', rendezvous? }); each player's own descriptor
+ * BYOW: the page config carries only public settings ({ mode: 'byow',
+ * lobbyBlocks?, logRpcs? }); no key of anyone's. Each player's own descriptor
  * ({ ds, wallet, sessionKey } from scripts/byow-setup-player.mjs) is pasted
  * once and kept in localStorage, never in a URL or in the page. Without a
  * descriptor the page is a read-only spectator.
@@ -93,7 +93,7 @@ export async function createTransport() {
     const { createByowTransport } = await import('./transport-byow.js')
     const me = loadMyDescriptor() ?? promptMyDescriptor()
     const peers = ['x', 'o'].map((k) => params.get(k)).filter((v) => v != null && v !== '')
-    return createByowTransport({ me, peers, rendezvous: config?.rendezvous ?? null })
+    return createByowTransport({ me, peers, lobbyBlocks: config?.lobbyBlocks, logRpcs: config?.logRpcs })
   }
   if (config == null) return localTransport()
   const { createFocTransport } = await import('./transport-foc.js')

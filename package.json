@@ -7,7 +7,7 @@
     "test": "node --test games/tic-tac-toe/*.test.js",
     "test:e2e": "node e2e/two-player.e2e.mjs",
     "test:e2e:byow": "node e2e/byow.e2e.mjs",
-    "proof:byow": "node scripts/byow-proof.mjs .byow/player-a.json .byow/player-b.json .byow/lobby.json"
+    "proof:byow": "node scripts/byow-proof.mjs .byow/player-a.json .byow/player-b.json"
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.8.1",

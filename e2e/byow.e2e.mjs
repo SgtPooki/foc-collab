@@ -3,10 +3,10 @@
  * BYOW browser proof: two isolated browser contexts, two player
  * descriptors (two wallets, two data sets), one built BYOW page. Alice
  * creates a game in her data set and shares the invite link; Bob opens it,
- * joins from his own data set; Alice's first move seats him as O; both
- * boards converge by polling Filecoin Onchain Cloud. Bob is discovered
- * through the rendezvous data set when the page has one configured,
- * otherwise through the link Bob copies for Alice.
+ * joins from his own data set; Alice's page discovers his data set from
+ * the PieceAdded event of his tagged join; Alice's first move seats him
+ * as O; both boards converge by polling Filecoin Onchain Cloud. No lobby,
+ * no publisher key in the page.
  *
  * Prereqs: a BUILT page (scripts/build-page.mjs <dir> <byow-config.json>)
  * served at E2E_URL (default http://localhost:4173/), and the two player
@@ -62,6 +62,7 @@ await alice.page.locator('#create').click()
 await alice.page.locator('#game').waitFor({ state: 'visible', timeout: T })
 const invite = alice.page.url()
 assert.match(invite, /[?&]x=\d+/, 'invite carries the root data set')
+assert.match(invite, /[?&]from=\d+/, 'invite carries the create block for discovery')
 log('alice', 'created', invite)
 
 await bob.page.goto(invite)
@@ -70,17 +71,11 @@ await bob.page.locator('#join').click()
 await bob.page.locator('#status').filter({ hasText: /you joined/ }).waitFor({ timeout: T })
 log('bob', 'joined from his own data set')
 
-const linkBack = bob.page.locator('#link-back')
-if (await linkBack.isVisible()) {
-  // No rendezvous configured: Bob sends Alice a link naming his data set.
-  const url = new globalThis.URL(invite)
-  url.searchParams.set('o', JSON.parse(B).ds)
-  log('bob', 'no rendezvous; alice opens the link-back', url.toString())
-  await alice.page.goto(url.toString())
-}
+assert.ok(await bob.page.locator('#link-back').isVisible(), 'link-back fallback offered while unratified')
+assert.match(bob.page.url(), /[?&]o=\d+/, 'bob\'s own URL now carries his data set')
 
 await alice.page.locator('#status').filter({ hasText: /joined — your first move/ }).waitFor({ timeout: T })
-log('alice', 'discovered bob through FOC')
+log('alice', 'discovered bob through chain events:', (await alice.page.locator('#byow-meta').textContent()).slice(0, 120))
 await alice.page.locator('#board button').nth(4).click()
 await alice.page.locator('#board button.pending').waitFor({ timeout: 3000 })
 await alice.page.locator('#status').filter({ hasText: /move sent/ }).waitFor({ timeout: T })

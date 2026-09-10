@@ -222,6 +222,35 @@ against the built page with the lobby configured:
 
 No runtime CDN requests; the page is self-contained.
 
+## Results, second pass: no publisher key (same day)
+
+The rendezvous data set and its embedded session key are gone (see
+`2026-09-10-byow-rendezvous-options.md`). Discovery now reads PieceAdded
+events: create and join uploads carry `{ app, game, type }` metadata, the
+invite carries the create block, and each client scans from there.
+
+Node proof (`npm run proof:byow`): full game, 434 seconds, Alice found
+Bob's join through the event scan 1 second after it settled, root-only
+spectator agreed, 0 ignored.
+
+Browser proof (`npm run test:e2e:byow`) against a page whose only config
+is `{ "mode": "byow" }`:
+
+| Step | Wall clock |
+| --- | --- |
+| Alice creates; invite carries root data set and start block | 0:00 |
+| Bob opens the link, joins from his own data set; his URL now carries `&o=` as the fallback | 1:43 |
+| Alice's page discovers Bob's data set from chain events | 1:51 |
+| Alice's first move ratifies Bob | 2:44 |
+| Bob moves, Alice's board shows it | 3:44 |
+
+One RPC finding that matters for anyone doing browser log scans: the
+default glif calibration endpoint fails browser CORS on `eth_getLogs`
+responses above about 100 KB (curl succeeds with the same headers), ankr
+caps the range below 2,000 blocks, and filfox and drpc serve 2,000-block
+scans to a browser in 2 to 3 seconds. Scans use filfox then drpc; the SDK
+keeps glif for everything else.
+
 ## What is proved, simulated, and missing
 
 Proved on calibration with two wallets: settlement (ladder step 1),
@@ -240,8 +269,8 @@ layer can add optimistic pieces without touching the fold.
 Still manual: each player runs `scripts/byow-setup-player.mjs` with their
 wallet and pastes the printed descriptor once. A wallet-connect flow that
 creates the data set and authorizes the session key from the page is the
-missing UX piece. The lobby data set is publisher-paid; with gossip it
-becomes optional.
+missing UX piece. There is no publisher-paid anything left; the page is
+static config plus code.
 
 Cost of the proof: about 0.1 tFIL of gas across both wallets and the
 10 USDFC deposit for wallet B, of which storage for a few kilobytes is a

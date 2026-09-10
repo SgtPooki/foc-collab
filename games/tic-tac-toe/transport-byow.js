@@ -5,18 +5,24 @@
  * own wallet pays for, plus an AddPieces-only session key for it. The
  * transport writes only there. It reads every data set it has been told
  * about (own, the opponent's, any discovered through invites, ratification
- * moves, or rendezvous announces) with no key at all, and returns the
- * union annotated with `src` (data set id) and `pieceId` so the v2 fold
- * can apply the seat-owner sequencing rules. The transport never
- * interprets pieces beyond parsing JSON.
+ * moves, or chain events) with no key at all, and returns the union
+ * annotated with `src` (data set id) and `pieceId` so the v2 fold can
+ * apply the seat-owner sequencing rules. The transport never interprets
+ * pieces beyond parsing JSON.
+ *
+ * Discovery needs no publisher and no key: uploads carry metadata tags,
+ * FOC emits them in PieceAdded events, and discover() scans those events
+ * (see discover.js). The page carries nothing but public config.
  *
  * Config:
  *   {
- *     me?:         { ds, wallet, sessionKey }   omit for a read-only spectator
- *     peers?:      [ds, ...]                    data sets to read from the start
- *     rendezvous?: { ds, wallet, sessionKey }   optional lobby data set for
- *                                               announce pieces (discovery only)
- *     storage?:    { get(key), set(key, value) } cache; localStorage in browsers
+ *     me?:       { ds, wallet, sessionKey }   omit for a read-only spectator
+ *     peers?:    [ds, ...]                    data sets to read from the start
+ *     storage?:  { get(key), set(key, value) } cache; localStorage in browsers
+ *     logRpcs?:  [url, ...]  RPCs for eth_getLogs scans, tried in order. The
+ *                default glif endpoint fails browser CORS on log responses
+ *                over ~100 KB (2026-09-10), so scans default to filfox then
+ *                drpc; everything else stays on the SDK's default RPC.
  *   }
  *
  * Works in node and browsers (fetch, WebCrypto, BigInt). The browser build
@@ -26,11 +32,13 @@ import {
   AddPiecesPermission, calibration, createPublicClient, custom, fromSecp256k1,
   getActivePiecesByCursor, getDataSet, getExpirations, getPDPProvider, http, Synapse,
 } from './foc-deps.js'
+import { scan, TAG_APP, TAG_GAME, TAG_TYPE } from './discover.js'
 import { homeLog } from './fold-byow.js'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 const MAX_PIECE_BYTES = 8192 // a game piece is ~300 bytes; refuse griefer blobs before buffering
 const RPC = calibration.rpcUrls.default.http[0]
+const DEFAULT_LOG_RPCS = ['https://calibration.filfox.info/rpc/v1', 'https://filecoin-calibration.drpc.org']
 
 function encodePiece(piece) {
   let json = JSON.stringify(piece)
@@ -135,12 +143,13 @@ async function openWriter(transport, me, source) {
   const ctx = await synapse.storage.createContext({ dataSetId })
   return {
     writeExpiry: Number(expirations[AddPiecesPermission] ?? 0n) * 1000,
-    async append(piece, onProgress) {
+    async append(piece, onProgress, tags) {
       onProgress?.('uploading to your data set')
       // Resolve once stored and the AddPieces transaction is submitted: the
       // piece is then effectively irrevocable. The poll loop observes truth.
       await new Promise((resolve, reject) => {
         ctx.upload(encodePiece(piece), {
+          pieceMetadata: tags, // emitted in PieceAdded; how others find this data set
           onStored: () => onProgress?.('stored by your provider'),
           onPiecesAdded: () => {
             onProgress?.('submitted on-chain')
@@ -157,19 +166,18 @@ export async function createByowTransport(config = {}) {
   const transport = http(RPC)
   const client = createPublicClient({ chain: calibration, transport })
   const me = config.me ?? null
-  const rendezvous = config.rendezvous ?? null
 
   const readers = new Map() // ds -> reader | Promise<reader>
   const problems = new Map() // ds -> last error message
   const known = new Set([...(config.peers ?? []).map(String)])
   if (me != null) known.add(String(me.ds))
-  if (rendezvous != null) known.add(String(rendezvous.ds))
 
   // Immutable bodies cached by CID, and per data set the ids we have ever
   // seen (id -> cid) so a piece that later disappears from the active list
   // is detected instead of silently rewinding the game.
   const CACHE_KEY = 'ttt:byow:bodies'
   const SEEN_KEY = 'ttt:byow:seen'
+  const SCAN_KEY = 'ttt:byow:scan'
   const load = (key) => {
     try {
       return JSON.parse(storage.get(key) ?? '{}')
@@ -179,6 +187,7 @@ export async function createByowTransport(config = {}) {
   }
   const bodies = new Map(Object.entries(load(CACHE_KEY)))
   const seen = load(SEEN_KEY) // { [ds]: { [pieceId]: cid } }
+  const scans = load(SCAN_KEY) // { [scope]: { scanned: block, hints: [...] } }
   let persistQueued = false
   function persist() {
     if (persistQueued) return
@@ -187,11 +196,62 @@ export async function createByowTransport(config = {}) {
       persistQueued = false
       storage.set(CACHE_KEY, JSON.stringify(Object.fromEntries(bodies)))
       storage.set(SEEN_KEY, JSON.stringify(seen))
+      storage.set(SCAN_KEY, JSON.stringify(scans))
     }, 250)
   }
 
   const writer = me == null ? null : await openWriter(transport, me, 'foc-collab-byow')
-  const lobbyWriter = rendezvous == null ? null : await openWriter(transport, rendezvous, 'foc-collab-byow-lobby')
+
+  // PieceAdded(dataSetId indexed, pieceId indexed, pieceCid, keys, values)
+  const pieceAdded = calibration.contracts.fwss.abi.find((e) => e.type === 'event' && e.name === 'PieceAdded')
+  const logClients = (config.logRpcs ?? DEFAULT_LOG_RPCS)
+    .map((url) => createPublicClient({ chain: calibration, transport: http(url, { retryCount: 0 }) }))
+  async function fetchLogs(fromBlock, toBlock) {
+    let lastError
+    for (const c of logClients) {
+      try {
+        return await c.getLogs({ address: calibration.contracts.fwss.address, event: pieceAdded, fromBlock, toBlock })
+      } catch (err) {
+        lastError = err
+      }
+    }
+    throw lastError
+  }
+  const DISCOVER_CHUNK = BigInt(config.discoverChunk ?? 2000)
+  const LOBBY_BLOCKS = BigInt(config.lobbyBlocks ?? 4000) // ~33h of calibration history
+
+  /**
+   * Scans PieceAdded events from `from` (or the checkpoint) to the head
+   * for pieces tagged app + game (or app + type=create for the lobby),
+   * remembers the hints, and adds every hinted data set to the read set.
+   * Returns { hints, scanned, failed }; failures are reported, not thrown.
+   */
+  async function discover({ app, game = null, from = null }) {
+    const scope = game == null ? `lobby:${app}` : `game:${app}:${game}`
+    const head = await client.getBlockNumber()
+    const prior = scans[scope] ?? { scanned: null, hints: [] }
+    let start
+    if (prior.scanned != null) start = BigInt(prior.scanned) + 1n
+    else if (from != null) start = BigInt(from)
+    else start = head > LOBBY_BLOCKS ? head - LOBBY_BLOCKS : 0n
+    const result = start > head
+      ? { hints: [], scanned: head, failed: [] }
+      : await scan({
+        from: start,
+        to: head,
+        chunk: DISCOVER_CHUNK,
+        fetch: fetchLogs,
+        match: (t) => t[TAG_APP] === app && (game == null ? t[TAG_TYPE] === 'create' : t[TAG_GAME] === game),
+      })
+    const hints = [...prior.hints]
+    for (const h of result.hints) {
+      if (!hints.some((k) => k.ds === h.ds && k.pieceId === h.pieceId)) hints.push(h)
+    }
+    scans[scope] = { scanned: String(result.scanned), hints }
+    persist()
+    for (const h of hints) known.add(h.ds)
+    return { hints, scanned: result.scanned, failed: result.failed }
+  }
 
   function reader(ds) {
     if (!readers.has(ds)) {
@@ -246,8 +306,8 @@ export async function createByowTransport(config = {}) {
     writeExpiry: writer?.writeExpiry ?? 0,
     pollMs: 8000,
     me: me == null ? null : { ds: String(me.ds), wallet: me.wallet },
-    rendezvous: rendezvous == null ? null : { ds: String(rendezvous.ds) },
-    rendezvousLog: rendezvous == null ? null : homeLog(rendezvous.ds),
+    blockNumber: () => client.getBlockNumber(),
+    discover,
 
     /** Start reading another player's data set (idempotent). */
     addDataSet(ds) {
@@ -259,14 +319,10 @@ export async function createByowTransport(config = {}) {
     /** Pieces seen earlier that are no longer active in their data set. */
     disputes: () => lastDisputes,
 
-    async append(piece, onProgress) {
+    /** Append to my own data set; `tags` ({ app, game, type }) are emitted on-chain for discovery. */
+    async append(piece, onProgress, tags) {
       if (writer == null) throw new Error('read-only: no wallet and session key configured')
-      await writer.append(piece, onProgress)
-    },
-    /** Write a discovery piece to the rendezvous data set (never folded). */
-    async announce(piece, onProgress) {
-      if (lobbyWriter == null) throw new Error('no rendezvous data set configured')
-      await lobbyWriter.append(piece, onProgress)
+      await writer.append(piece, onProgress, tags)
     },
     async list() {
       const results = await Promise.all([...known].map(async (ds) => {

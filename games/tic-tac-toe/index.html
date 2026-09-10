@@ -73,6 +73,7 @@
 
 <script type="module">
 import { fold, lobby, seatOf, status } from './fold.js'
+import { tagsFor } from './discover.js'
 import { dataSetsOf, foldByow, lobbyByow } from './fold-byow.js'
 import { loadIdentity, signPiece, verifyAll } from './identity.js'
 import { createTransport } from './transport.js'
@@ -120,10 +121,17 @@ const $ = (id) => document.getElementById(id)
 const byow = typeof transport.addDataSet === 'function'
 const V = byow ? 2 : 1
 const root = byow ? (params.get('x') ?? transport.me?.ds ?? null) : null
+const fromBlock = params.get('from') // block the game was created at: where discovery starts
 if (byow && params.get('o')) transport.addDataSet(params.get('o'))
+let discovery = { hints: [], failed: [] } // last chain-event scan, for the meta line
 const foldGame = (pieces) => (byow ? foldByow(gameId, root, pieces) : fold(gameId, pieces))
 const foldLobby = (pieces) => (byow ? lobbyByow(pieces) : lobby(pieces))
-const gameHref = (g) => (byow ? `?game=${encodeURIComponent(g.game)}&x=${encodeURIComponent(g.root)}` : `?game=${encodeURIComponent(g.game)}`)
+const gameHref = (g) => {
+  if (!byow) return `?game=${encodeURIComponent(g.game)}`
+  const hint = discovery.hints.find((h) => h.ds === g.root && h.tags.type === 'create')
+  const from = hint == null ? '' : `&from=${hint.block}`
+  return `?game=${encodeURIComponent(g.game)}&x=${encodeURIComponent(g.root)}${from}`
+}
 
 let pieces = []
 let busy = null // label of the in-flight append, e.g. 'placing your X'
@@ -254,7 +262,7 @@ function movePayload(state, cell, ratifying) {
 
 // BYOW-only affordances: which data sets this board is folded from, read
 // problems, disputes (a piece vanished from its data set), and the
-// link-back O needs when no rendezvous data set is configured.
+// link-back fallback O can send if chain-event discovery is unavailable.
 function renderByowMeta(state, seat, iJoined) {
   const meta = $('byow-meta')
   if (!byow) return
@@ -265,12 +273,14 @@ function renderByowMeta(state, seat, iJoined) {
   const disputes = transport.disputes()
   const lines = [`folded from data set${sets.length === 1 ? '' : 's'} ${sets.map((d) => `#${d}`).join(', ')}`]
   if (state.homes.O != null) lines.push(`X writes to #${state.homes.X}, O writes to #${state.homes.O}`)
+  if (fromBlock == null) lines.push('invite has no start block: opponent discovery falls back to the link-back button')
+  if (discovery.failed.length > 0) lines.push(`chain scan skipped ${discovery.failed.length} block range(s) (${discovery.failed[0].error})`)
   if (problems.length > 0) lines.push(`cannot read ${problems.map((p) => `#${p.ds} (${p.error})`).join('; ')} — showing last known pieces`)
   if (disputes.length > 0) lines.push(`DISPUTED: ${disputes.length} piece(s) were removed from their data set after this browser saw them; the board keeps them`)
   meta.textContent = lines.join('. ')
   meta.classList.toggle('error', problems.length > 0 || disputes.length > 0)
   const back = $('link-back')
-  back.hidden = !(iJoined && !state.ratified && transport.rendezvous == null)
+  back.hidden = !(iJoined && !state.ratified)
 }
 
 function statusLine(state, seat, joinable, ratifying = false, iJoined = false) {
@@ -311,18 +321,30 @@ async function verifiedPieces(raw) {
     // checks it against where the piece was read from.
     if (!byow) return ok.log === transport.logId ? ok : null
     if (ok.v !== 2) return null
-    if (ok.type === 'announce' && typeof ok.ds === 'string' && typeof ok.root === 'string'
-      && ok.log === transport.rendezvousLog && ok.src === transport.rendezvous?.ds) {
-      // Discovery only: a player announced their data set for a game.
-      if (gameId == null || (ok.game === gameId && ok.root === root)) transport.addDataSet(ok.ds)
-      if (gameId == null) transport.addDataSet(ok.root)
-      return null
-    }
     return ok
   })
 }
 
+// Discovery through chain events (BYOW only): in a game, find every data
+// set holding a piece tagged with this game id, scanning from the create
+// block in the invite; in the lobby, find recent creates. Pure hints; the
+// fold verifies whatever they point at. Failures show in the meta line.
+async function discoverPeers() {
+  if (!byow) return
+  try {
+    if (gameId != null && fromBlock != null) {
+      discovery = await transport.discover({ app: APP, game: gameId, from: fromBlock })
+    } else if (gameId == null) {
+      discovery = await transport.discover({ app: APP })
+    }
+  } catch (err) {
+    console.error(err)
+    discovery = { hints: discovery.hints, failed: [{ error: err?.message?.slice(0, 80) ?? String(err) }] }
+  }
+}
+
 async function refresh() {
+  await discoverPeers()
   pieces = await verifiedPieces(await transport.list())
   if (gameId != null && pendingMove != null) {
     const board = foldGame(pieces).board
@@ -356,10 +378,11 @@ async function append(payload, label, move = null) {
   render()
   try {
     const signed = await signPiece({ ...payload, app: APP, log: transport.logId }, identity)
+    const tags = byow ? tagsFor(APP, payload.game, payload.type) : undefined
     await transport.append(signed, (stage) => {
       busyStage = stage
       render()
-    })
+    }, tags)
     busy = null
     busyStage = null
     // pendingMove stays until refresh() sees the move in the log
@@ -376,33 +399,18 @@ async function append(payload, label, move = null) {
   }
 }
 
-async function announce(game, gameRoot) {
-  if (!byow || transport.rendezvous == null) return
-  busy = 'announcing in the lobby'
-  render()
-  try {
-    const signed = await signPiece(
-      { v: 2, app: APP, log: transport.rendezvousLog, type: 'announce', game, root: gameRoot, ds: transport.me.ds, role: 'player' },
-      identity,
-    )
-    await transport.announce(signed, (stage) => { busyStage = stage; render() })
-  } catch (err) {
-    console.error(err)
-    lastError = `announced nothing (${err?.message?.slice(0, 120) ?? err}) — share the invite link by hand`
-  }
-  busy = null
-  busyStage = null
-  render()
-}
-
-function newGame(name) {
+async function newGame(name) {
   const game = `game-${crypto.randomUUID()}`
-  return append({ v: V, type: 'create', game, name }, 'creating game')
-    .then(async (ok) => {
-      if (!ok) return
-      if (byow) await announce(game, transport.me.ds)
-      location.search = byow ? `?game=${encodeURIComponent(game)}&x=${encodeURIComponent(transport.me.ds)}` : `?game=${encodeURIComponent(game)}`
-    })
+  // The invite carries the block the game was created after, so joiners'
+  // clients and the creator's own scan start there and never earlier.
+  const from = byow ? String(await transport.blockNumber()) : null
+  const ok = await append({ v: V, type: 'create', game, name }, 'creating game')
+  if (!ok) return
+  if (!byow) {
+    location.search = `?game=${encodeURIComponent(game)}`
+    return
+  }
+  location.search = `?game=${encodeURIComponent(game)}&x=${encodeURIComponent(transport.me.ds)}&from=${from}`
 }
 
 $('create').onclick = () => {
@@ -413,7 +421,13 @@ $('create').onclick = () => {
 $('join').onclick = async () => {
   const state = foldGame(pieces)
   const payload = byow ? { v: 2, type: 'join', game: gameId, prev: state.lastRef } : { v: 1, type: 'join', game: gameId }
-  if (await append(payload, 'joining as O')) await announce(gameId, root)
+  if (!(await append(payload, 'joining as O'))) return
+  if (byow) {
+    // Make this tab's own URL the link-back, so a plain share carries O's data set.
+    const url = new URL(location.href)
+    url.searchParams.set('o', transport.me.ds)
+    history.replaceState(null, '', url)
+  }
 }
 
 $('link-back').onclick = async () => {

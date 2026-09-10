@@ -24,10 +24,12 @@ all state is a deterministic fold over the piece log in piece-id order.
     AddPieces-only session key; prints the player descriptor JSON (keep it
     in gitignored `.byow/`)
   - `npm run proof:byow` — settlement proof: two wallets, two data sets, a
-    full game, a stranger reconstructs from FOC alone (~10 min)
+    full game, opponent found via PieceAdded events, a stranger
+    reconstructs from FOC alone (~10 min)
   - `npm run test:e2e:byow` — the same in two browser contexts against a
     built page: `node scripts/build-page.mjs dist/byow .byow/page-config.json`
-    where the config is `{ "mode": "byow", "rendezvous": {ds, wallet, sessionKey}? }`
+    where the config is `{ "mode": "byow" }` (no key of anyone's)
+  - `docs/BYOW-PLAYERS.md` — what a teammate does to play with their wallet
 - Publish via the `publish` skill (`.claude/skills/publish/SKILL.md`);
   always source `config.env` + `.env` before any filecoin-pin command
 
@@ -41,10 +43,13 @@ all state is a deterministic fold over the piece log in piece-id order.
 - `games/tic-tac-toe/identity.js` — P-256 signing identity (non-extractable
   CryptoKey in IndexedDB); verification runs between fetch and fold and
   annotates each piece with its `ref`
+- `games/tic-tac-toe/discover.js` — pure chain-event discovery: metadata
+  tags on uploads, chunked PieceAdded scanning, checkpoints. Hints only;
+  the fold verifies what they point at
 - `games/tic-tac-toe/transport*.js` — dumb append/list transports; they
   never interpret pieces. `transport-byow.js` writes to the player's own
-  data set and reads any number of data sets keylessly, annotating `src`
-  and `pieceId`; it runs in node and the browser
+  data set (tagged), reads any number of data sets keylessly annotating
+  `src` and `pieceId`, and discovers peers from events; node and browser
 - `scripts/` — owner setup, build, and chain spike scripts
 - `docs/FEASIBILITY.md` — architecture rationale, security model, blockers
 
