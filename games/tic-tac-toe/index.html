@@ -16,7 +16,7 @@
   #board button { height: 84px; font-size: 2.2rem; border-radius: 10px; }
   #board button.pending { opacity: 0.55; animation: pulse 1.1s ease-in-out infinite; border-color: var(--accent); }
   #board button.last { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-  #status.error, #byow-meta.error { color: #e5534b; }
+  #status.error, #byow-meta.error, #wallet-status.error { color: #e5534b; }
   #status.busy::after, #status.waiting::after {
     content: ''; display: inline-block; width: 1.2em; text-align: left;
     animation: dots 1.5s steps(4, end) infinite;
@@ -44,6 +44,10 @@
   same fold. Nothing is ever mutated. Moves land on-chain in ~30s — yours
   shows instantly, your opponent's arrives with the next epoch.</p>
   <p class="meta" id="transport-label"></p>
+  <div class="row" id="wallet-row" hidden>
+    <button id="connect">connect wallet to play</button>
+    <span class="meta" id="wallet-status"></span>
+  </div>
   <p id="banner" hidden></p>
 
   <section id="lobby" hidden>
@@ -77,6 +81,7 @@ import { tagsFor } from './discover.js'
 import { dataSetsOf, foldByow, lobbyByow } from './fold-byow.js'
 import { loadIdentity, signPiece, verifyAll } from './identity.js'
 import { createTransport } from './transport.js'
+import { clearDescriptor, hasWallet, provisionPlayer } from './wallet-byow.js'
 
 const APP = 'foc-ttt' // domain-separation tag, signed into every piece
 
@@ -145,11 +150,42 @@ let lastNotifiedSeq = -1
 if (transport.writeExpiry) {
   const banner = $('banner')
   if (transport.writeExpiry < Date.now()) {
-    banner.textContent = 'the demo write key has expired — games are read-only until the publisher re-arms it'
+    banner.textContent = byow
+      ? 'your session key has expired — reconnect your wallet to play'
+      : 'the demo write key has expired — games are read-only until the publisher re-arms it'
     banner.hidden = false
   } else if (transport.writeExpiry < Date.now() + 3 * 3600000) {
-    banner.textContent = `heads up: the demo write key expires ${new Date(transport.writeExpiry).toLocaleString()}`
+    banner.textContent = `heads up: your write key expires ${new Date(transport.writeExpiry).toLocaleString()}`
     banner.hidden = false
+  }
+}
+
+// BYOW onboarding: with no descriptor (or an expired one) the page is a
+// spectator and offers to make one from the connected wallet. Every stage
+// is shown; every failure names its step. Success reloads into play mode.
+const needsWallet = byow && (transport.me == null || (transport.writeExpiry && transport.writeExpiry < Date.now()))
+if (needsWallet) {
+  $('wallet-row').hidden = false
+  const status = $('wallet-status')
+  const connect = $('connect')
+  if (!hasWallet()) {
+    connect.disabled = true
+    status.textContent = 'no browser wallet found — install MetaMask (or any EIP-1193 wallet) on Filecoin calibration to play; you can still watch games'
+  }
+  connect.onclick = async () => {
+    connect.disabled = true
+    status.classList.remove('error')
+    try {
+      await clearDescriptor()
+      const me = await provisionPlayer({ onProgress: (stage) => { status.textContent = `${stage}…` } })
+      status.textContent = `ready: your data set #${me.ds}, reloading`
+      location.reload()
+    } catch (err) {
+      console.error(err)
+      status.textContent = `could not set up (${err?.message ?? err}) — fix and try again`
+      status.classList.add('error')
+      connect.disabled = false
+    }
   }
 }
 
@@ -165,7 +201,7 @@ function renderLobby() {
   const open = games.filter((g) => !joined(g) && g.seats.O == null)
   const rest = games.filter((g) => !joined(g) && g.seats.O != null)
   create.disabled = busy != null || (byow && transport.me == null)
-  if (byow && transport.me == null) create.textContent = 'spectating: paste a player descriptor to play'
+  if (byow && transport.me == null) create.textContent = 'spectating: connect a wallet to play'
   $('games').replaceChildren(
     ...lobbySection('your games', mine),
     ...lobbySection('open to join', open.slice(0, 15), open.length),

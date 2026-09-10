@@ -6,7 +6,7 @@
  * only the address. Run `filecoin-pin payments setup` for it afterwards:
  *
  *   set -a; . ./config.env; . ./.env; set +a
- *   node scripts/byow-fund-wallet.mjs [tFIL] [USDFC]      (default 5 25)
+ *   node scripts/byow-fund-wallet.mjs [tFIL] [USDFC] [label]   (default 5 25 B)
  *   PRIVATE_KEY=$PLAYER_B_PRIVATE_KEY npx --yes filecoin-pin@latest payments setup --auto --deposit 10
  */
 import fs from 'node:fs'
@@ -14,14 +14,16 @@ import { calibration } from '@filoz/synapse-core/chains'
 import { createWalletClient, http, parseEther, parseUnits, publicActions } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
-const [filArg = '5', usdfcArg = '25'] = process.argv.slice(2)
+const [filArg = '5', usdfcArg = '25', label = 'B'] = process.argv.slice(2)
+const KEY_VAR = `PLAYER_${label}_PRIVATE_KEY`
+const ADDR_VAR = `PLAYER_${label}_ADDRESS`
 const { PRIVATE_KEY } = process.env
 if (!PRIVATE_KEY) {
   console.error('usage: PRIVATE_KEY=0x.. node scripts/byow-fund-wallet.mjs [tFIL] [USDFC]')
   process.exit(1)
 }
-if (process.env.PLAYER_B_PRIVATE_KEY) {
-  console.error('PLAYER_B_PRIVATE_KEY already set in the environment; refusing to mint another')
+if (process.env[KEY_VAR]) {
+  console.error(`${KEY_VAR} already set in the environment; refusing to mint another`)
   process.exit(1)
 }
 
@@ -34,10 +36,10 @@ const client = createWalletClient({
 
 const playerKey = generatePrivateKey()
 const player = privateKeyToAccount(playerKey)
-console.error(`minted player B wallet ${player.address}`)
+console.error(`minted player ${label} wallet ${player.address}`)
 // Persist before any transfer so an RPC flake mid-way cannot orphan funds.
-fs.appendFileSync('.env', `PLAYER_B_PRIVATE_KEY=${playerKey}\nPLAYER_B_ADDRESS=${player.address}\n`)
-console.error('appended PLAYER_B_PRIVATE_KEY and PLAYER_B_ADDRESS to .env')
+fs.appendFileSync('.env', `${KEY_VAR}=${playerKey}\n${ADDR_VAR}=${player.address}\n`)
+console.error(`appended ${KEY_VAR} and ${ADDR_VAR} to .env`)
 
 // The public calibration RPC intermittently answers "requested a future
 // epoch" while a new tipset settles; retry the whole step a few times.

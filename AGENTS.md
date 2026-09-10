@@ -29,6 +29,9 @@ all state is a deterministic fold over the piece log in piece-id order.
   - `npm run test:e2e:byow` — the same in two browser contexts against a
     built page: `node scripts/build-page.mjs dist/byow .byow/page-config.json`
     where the config is `{ "mode": "byow" }` (no key of anyone's)
+  - `E2E_WALLET_KEY=$PLAYER_C_PRIVATE_KEY npm run test:e2e:wallet` — a
+    fresh funded wallet becomes a player from the page through a fake
+    EIP-1193 provider (deposit, session key, data set), then creates a game
   - `docs/BYOW-PLAYERS.md` — what a teammate does to play with their wallet
 - Publish via the `publish` skill (`.claude/skills/publish/SKILL.md`);
   always source `config.env` + `.env` before any filecoin-pin command
@@ -43,6 +46,10 @@ all state is a deterministic fold over the piece log in piece-id order.
 - `games/tic-tac-toe/identity.js` — P-256 signing identity (non-extractable
   CryptoKey in IndexedDB); verification runs between fetch and fold and
   annotates each piece with its `ref`
+- `games/tic-tac-toe/wallet-byow.js` — in-page wallet connect: deposit and
+  approval if missing, AddPieces-only session key, data set create or
+  reuse, descriptor in IndexedDB. Reusable for any BYOW page (corgi feeding
+  is the same deposit call)
 - `games/tic-tac-toe/discover.js` — pure chain-event discovery: metadata
   tags on uploads, chunked PieceAdded scanning, checkpoints. Hints only;
   the fold verifies what they point at

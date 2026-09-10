@@ -62,28 +62,22 @@ export function pageConfig() {
 
 /**
  * BYOW: the page config carries only public settings ({ mode: 'byow',
- * lobbyBlocks?, logRpcs? }); no key of anyone's. Each player's own descriptor
- * ({ ds, wallet, sessionKey } from scripts/byow-setup-player.mjs) is pasted
- * once and kept in localStorage, never in a URL or in the page. Without a
- * descriptor the page is a read-only spectator.
+ * lobbyBlocks?, logRpcs? }); no key of anyone's. Each player's own
+ * descriptor ({ ds, wallet, sessionKey }) is made in the page by
+ * wallet-byow.js from their connected wallet and kept in IndexedDB.
+ * Without one the page is a read-only spectator that offers "connect
+ * wallet". (A descriptor in localStorage under ttt:byow:me is honored
+ * too: that is what the scripted proofs seed.)
  */
-const ME_KEY = 'ttt:byow:me'
-
-export function loadMyDescriptor() {
+export async function loadMyDescriptor() {
+  const { loadDescriptor } = await import('./wallet-byow.js')
+  const saved = await loadDescriptor().catch(() => null)
+  if (saved != null) return saved
   try {
-    const me = JSON.parse(localStorage.getItem(ME_KEY) ?? 'null')
+    const me = JSON.parse(localStorage.getItem('ttt:byow:me') ?? 'null')
     if (me?.ds && me?.wallet && me?.sessionKey) return me
-  } catch { /* fall through to prompt */ }
+  } catch { /* nothing seeded */ }
   return null
-}
-
-export function promptMyDescriptor() {
-  const raw = prompt('Paste your player descriptor JSON ({ ds, wallet, sessionKey }; stays in this browser). Cancel to spectate:')
-  if (!raw) return null
-  const me = JSON.parse(raw)
-  if (!me?.ds || !me?.wallet || !me?.sessionKey) throw new Error('descriptor needs ds, wallet, sessionKey')
-  localStorage.setItem(ME_KEY, JSON.stringify(me))
-  return me
 }
 
 export async function createTransport() {
@@ -91,7 +85,7 @@ export async function createTransport() {
   const params = new URLSearchParams(location.search)
   if (config?.mode === 'byow' || params.get('transport') === 'byow') {
     const { createByowTransport } = await import('./transport-byow.js')
-    const me = loadMyDescriptor() ?? promptMyDescriptor()
+    const me = await loadMyDescriptor()
     const peers = ['x', 'o'].map((k) => params.get(k)).filter((v) => v != null && v !== '')
     return createByowTransport({ me, peers, lobbyBlocks: config?.lobbyBlocks, logRpcs: config?.logRpcs })
   }

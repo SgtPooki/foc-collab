@@ -266,11 +266,16 @@ Not built: gossip (step 4) and gossip reconciliation (step 5). The
 transport already separates `list()` from `confirmedList()` so a gossip
 layer can add optimistic pieces without touching the fold.
 
-Still manual: each player runs `scripts/byow-setup-player.mjs` with their
-wallet and pastes the printed descriptor once. A wallet-connect flow that
-creates the data set and authorizes the session key from the page is the
-missing UX piece. There is no publisher-paid anything left; the page is
-static config plus code.
+Onboarding (same day, third pass): wallet connect in the page
+(`wallet-byow.js`). Proved with a freshly minted wallet holding only tFIL
+and USDFC, driven through a fake EIP-1193 provider whose signing runs in
+node (`e2e/byow-wallet.e2e.mjs`): permit signature and deposit
+transaction (72 s to confirm), session key authorization transaction
+(60 s), CreateDataSet plus AddPieces typed-data signatures with the
+provider submitting the transaction (56 s), reload into play mode, then a
+game created through the session key with zero wallet prompts. 3 min 12 s
+end to end. Nothing is pasted and no script is run. There is no
+publisher-paid anything; the page is static config plus code.
 
 Cost of the proof: about 0.1 tFIL of gas across both wallets and the
 10 USDFC deposit for wallet B, of which storage for a few kilobytes is a

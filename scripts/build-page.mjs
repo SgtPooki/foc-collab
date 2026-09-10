@@ -35,12 +35,15 @@ execFileSync('npx', [
 for (const f of ['index.html', 'fold.js', 'fold-byow.js', 'discover.js', 'identity.js', 'transport.js', 'transport-foc.js']) {
   fs.copyFileSync(path.join(src, f), path.join(outDir, f))
 }
-// The BYOW transport is shared with node (proof scripts import it straight
-// from node_modules through foc-deps.js); the page gets the bundled copy.
-fs.writeFileSync(
-  path.join(outDir, 'transport-byow.js'),
-  fs.readFileSync(path.join(src, 'transport-byow.js'), 'utf8').replace("from './foc-deps.js'", "from './vendor-foc.js'"),
-)
+// The BYOW transport and wallet flow are shared with node (proof scripts
+// import them straight from node_modules through foc-deps.js); the page
+// gets copies pointed at the bundle.
+for (const f of ['transport-byow.js', 'wallet-byow.js']) {
+  fs.writeFileSync(
+    path.join(outDir, f),
+    fs.readFileSync(path.join(src, f), 'utf8').replace("from './foc-deps.js'", "from './vendor-foc.js'"),
+  )
+}
 
 if (configPath) {
   const config = JSON.stringify(JSON.parse(fs.readFileSync(configPath, 'utf8')))
