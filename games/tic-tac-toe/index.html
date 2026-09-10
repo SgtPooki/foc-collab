@@ -38,7 +38,7 @@
 <body>
 <main>
   <h1>tic-tac-toe, event-sourced</h1>
-  <p class="meta">Every game and every move is an appended JSON piece in one shared
+  <p class="meta" id="intro">Every game and every move is an appended JSON piece in one shared
   log. Lobby and boards are a deterministic fold over that log: illegal,
   out-of-turn, and impostor pieces are ignored by every client computing the
   same fold. Nothing is ever mutated. Moves land on-chain in ~30s — yours
@@ -129,6 +129,13 @@ const root = byow ? (params.get('x') ?? transport.me?.ds ?? null) : null
 const fromBlock = params.get('from') // block the game was created at: where discovery starts
 if (byow && params.get('o')) transport.addDataSet(params.get('o'))
 let discovery = { hints: [], failed: [] } // last chain-event scan, for the meta line
+if (byow) {
+  $('intro').textContent = 'Bring your own wallet: every move you make is a signed JSON piece '
+    + 'in a data set your wallet pays for on Filecoin Onchain Cloud, and your opponent\'s moves live in theirs. '
+    + 'Both pages read both data sets straight from the chain and fold them with the same rules: illegal, '
+    + 'out-of-turn, and impostor pieces are ignored everywhere. Nothing is ever mutated and there is no server. '
+    + 'A move takes about a minute to settle; yours shows at once, your opponent\'s arrives on the next poll.'
+}
 const foldGame = (pieces) => (byow ? foldByow(gameId, root, pieces) : fold(gameId, pieces))
 const foldLobby = (pieces) => (byow ? lobbyByow(pieces) : lobby(pieces))
 const gameHref = (g) => {

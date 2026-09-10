@@ -1,8 +1,8 @@
 # Play tic-tac-toe with your own wallet
 
 Published 2026-09-10 (calibration, wallet-connect build):
-https://bafybeidjvyxwn3rh53vjncz4hgjz4w7mrzjlx3wxugcxrd2dojlgrt3et4.ipfs.inbrowser.link/
-(root CID `bafybeidjvyxwn3rh53vjncz4hgjz4w7mrzjlx3wxugcxrd2dojlgrt3et4`, also at
+https://bafybeifna5ufep6zocoogxhkgtmpk557vl7mja74yuqr67pkmf72frg45y.ipfs.inbrowser.link/
+(root CID `bafybeifna5ufep6zocoogxhkgtmpk557vl7mja74yuqr67pkmf72frg45y`, also at
 `https://<cid>.ipfs.dweb.link/`). Note that filecoin-pin 2.0.1 fails on
 directory adds ("pieceSizes must contain only positive byte sizes");
 publish with `npx filecoin-pin@1.3.1 add dist/byow`.
