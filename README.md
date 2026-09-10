@@ -8,6 +8,10 @@ No server, no database, no coordination service.
 
 Idea and mini-plan: [Notion — viewer saves for published artifacts](https://app.notion.com/p/filecoindev/Idea-viewer-saves-for-published-artifacts-session-key-writes-to-FOC-3cddc41950c1819fb40eeb2cbe14263a).
 
+Play: https://sgtpooki.github.io/foc-collab/ (GitHub Pages, deployed from
+`main` by `.github/workflows/pages.yml`; the repo stays private, only the
+built site is public).
+
 ## What's here
 
 - `games/tic-tac-toe/` — the proof-of-concept game. `fold.js` is the pure

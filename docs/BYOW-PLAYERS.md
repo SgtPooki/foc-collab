@@ -1,6 +1,10 @@
 # Play tic-tac-toe with your own wallet
 
-Published 2026-09-10 (calibration, wallet-connect build):
+Play here (stable URL, keeps your session key and identity across releases):
+https://sgtpooki.github.io/foc-collab/tic-tac-toe/
+
+Also published to Filecoin Onchain Cloud on 2026-09-10 (each publish is a new
+origin, so wallet setup repeats there):
 https://bafybeifna5ufep6zocoogxhkgtmpk557vl7mja74yuqr67pkmf72frg45y.ipfs.inbrowser.link/
 (root CID `bafybeifna5ufep6zocoogxhkgtmpk557vl7mja74yuqr67pkmf72frg45y`, also at
 `https://<cid>.ipfs.dweb.link/`). Note that filecoin-pin 2.0.1 fails on
