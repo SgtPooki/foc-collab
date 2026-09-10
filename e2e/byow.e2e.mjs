@@ -19,6 +19,20 @@ import fs from 'node:fs'
 import { chromium } from 'playwright'
 
 const URL = process.env.E2E_URL ?? 'http://localhost:4173/'
+// Board differences per game: what to click and what to expect.
+const GAMES = {
+  'tic-tac-toe': {
+    first: '#board button >> nth=4', firstMark: async (p) => (await p.locator('#board button').nth(4).textContent()) === 'X',
+    second: '#board button >> nth=0', secondMark: async (p) => (await p.locator('#board button').nth(0).textContent()) === 'O',
+    pending: '#board button.pending', last: '#board button.last', oToMove: 'O to move', xToMove: 'X to move',
+  },
+  'connect-four': {
+    first: '#board .cell.drop >> nth=3', firstMark: async (p) => (await p.locator('#board .disc.X').count()) === 1,
+    second: '#board .cell.drop >> nth=0', secondMark: async (p) => (await p.locator('#board .disc.O').count()) === 1,
+    pending: '#board .disc.pending', last: '#board .disc.last', oToMove: 'Yellow to move', xToMove: 'Red to move',
+  },
+}
+const GAME = GAMES[process.env.E2E_GAME ?? 'tic-tac-toe']
 const A = fs.readFileSync(process.env.E2E_PLAYER_A ?? '.byow/player-a.json', 'utf8')
 const B = fs.readFileSync(process.env.E2E_PLAYER_B ?? '.byow/player-b.json', 'utf8')
 const T = 360000
@@ -76,21 +90,21 @@ assert.match(bob.page.url(), /[?&]o=\d+/, 'bob\'s own URL now carries his data s
 
 await alice.page.locator('#status').filter({ hasText: /joined — your first move/ }).waitFor({ timeout: T })
 log('alice', 'discovered bob through chain events:', (await alice.page.locator('#byow-meta').textContent()).slice(0, 120))
-await alice.page.locator('#board button').nth(4).click()
-await alice.page.locator('#board button.pending').waitFor({ timeout: 3000 })
+await alice.page.locator(GAME.first).click()
+await alice.page.locator(GAME.pending).waitFor({ timeout: 3000 })
 await alice.page.locator('#status').filter({ hasText: /move sent/ }).waitFor({ timeout: T })
 await alice.page.locator('#status').filter({ hasText: 'waiting for your opponent' }).waitFor({ timeout: T })
 log('alice', 'ratified bob as O with X at 4')
 
-await bob.page.locator('#status').filter({ hasText: 'O to move' }).waitFor({ timeout: T })
-assert.equal(await bob.page.locator('#board button').nth(4).textContent(), 'X')
+await bob.page.locator('#status').filter({ hasText: GAME.oToMove }).waitFor({ timeout: T })
+assert.ok(await GAME.firstMark(bob.page), 'bob sees the first move')
 assert.match(await bob.page.locator('#byow-meta').textContent(), /O writes to #/)
 log('bob', 'is O; board shows X at 4; meta:', (await bob.page.locator('#byow-meta').textContent()).slice(0, 100))
-await bob.page.locator('#board button').nth(0).click()
+await bob.page.locator(GAME.second).click()
 await bob.page.locator('#status').filter({ hasText: 'waiting for your opponent' }).waitFor({ timeout: T })
-await alice.page.locator('#status').filter({ hasText: 'X to move' }).waitFor({ timeout: T })
-assert.equal(await alice.page.locator('#board button').nth(0).textContent(), 'O')
-assert.ok((await alice.page.locator('#board button.last').count()) >= 1, 'last-move highlight')
+await alice.page.locator('#status').filter({ hasText: GAME.xToMove }).waitFor({ timeout: T })
+assert.ok(await GAME.secondMark(alice.page), 'alice sees the reply')
+assert.ok((await alice.page.locator(GAME.last).count()) >= 1, 'last-move highlight')
 assert.equal(cdnHits, 0, 'no runtime CDN requests')
 log('e2e', 'PASS: two wallets, two data sets, two browsers converged')
 await browser.close()

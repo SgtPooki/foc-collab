@@ -18,9 +18,12 @@ fs.rmSync(outDir, { recursive: true, force: true })
 fs.mkdirSync(outDir, { recursive: true })
 fs.copyFileSync(path.join(root, 'site/index.html'), path.join(outDir, 'index.html'))
 fs.writeFileSync(path.join(outDir, '.nojekyll'), '')
-execFileSync('node', [
-  path.join(root, 'scripts/build-page.mjs'),
-  path.join(outDir, 'tic-tac-toe'),
-  path.join(root, 'site/tic-tac-toe.config.json'),
-], { stdio: 'inherit' })
+for (const game of ['tic-tac-toe', 'connect-four']) {
+  execFileSync('node', [
+    path.join(root, 'scripts/build-page.mjs'),
+    path.join(outDir, game),
+    path.join(root, `site/${game}.config.json`),
+    '--game', game,
+  ], { stdio: 'inherit' })
+}
 console.log(`site built at ${outDir}`)

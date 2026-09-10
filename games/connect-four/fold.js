@@ -62,14 +62,14 @@ export function initialState(game) {
 }
 
 /** Lowest empty row in `col`, or -1 when the column is full. */
-function landingRow(board, col) {
+export function landingRow(board, col) {
   for (let row = 0; row < ROWS; row++) {
     if (board[idx(col, row)] == null) return row
   }
   return -1
 }
 
-function resultOf(board) {
+export function resultOf(board) {
   for (const line of LINES) {
     const [a, b, c, d] = line
     if (board[a] != null && board[a] === board[b] && board[a] === board[c] && board[a] === board[d]) {

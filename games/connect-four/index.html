@@ -29,7 +29,7 @@
   .disc.pending { opacity: 0.55; animation: pulse 1.1s ease-in-out infinite; }
   .disc.last { outline: 2px solid var(--accent); outline-offset: 1px; }
   .disc.win { outline: 3px solid #fff; outline-offset: 2px; animation: pulse 1.1s ease-in-out infinite; }
-  #status.error { color: #e5534b; }
+  #status.error, #byow-meta.error, #wallet-status.error { color: #e5534b; }
   #status.busy::after, #status.waiting::after {
     content: ''; display: inline-block; width: 1.2em; text-align: left;
     animation: dots 1.5s steps(4, end) infinite;
@@ -51,12 +51,16 @@
 <body>
 <main>
   <h1>connect four, event-sourced</h1>
-  <p class="meta">Every game and every move is an appended JSON piece in one shared
+  <p class="meta" id="intro">Every game and every move is an appended JSON piece in one shared
   log. Lobby and boards are a deterministic fold over that log: illegal,
   out-of-turn, and impostor pieces are ignored by every client computing the
   same fold. Nothing is ever mutated. Moves land on-chain in ~30s — yours
   shows instantly, your opponent's arrives with the next epoch.</p>
   <p class="meta" id="transport-label"></p>
+  <div class="row" id="wallet-row" hidden>
+    <button id="connect">connect wallet to play</button>
+    <span class="meta" id="wallet-status"></span>
+  </div>
   <p id="banner" hidden></p>
 
   <section id="lobby" hidden>
@@ -73,6 +77,7 @@
       <a href="?">← lobby</a>
       <button id="share">copy invite link</button>
       <button id="join" hidden>join as Yellow</button>
+      <button id="link-back" hidden>copy link for X</button>
       <button id="rematch" hidden>rematch</button>
       <button id="notify" hidden>🔔 notify me on my turn</button>
     </div>
@@ -80,27 +85,23 @@
     <p class="meta">click a column to drop a disc — it falls to the lowest open hole</p>
     <p id="status"></p>
     <p class="meta" id="log-info"></p>
+    <p class="meta" id="byow-meta" hidden></p>
   </section>
 </main>
 
 <script type="module">
-import { fold, lobby, seatOf, status, COLS, ROWS } from './fold.js'
-import { loadIdentity, signPiece, verifyAll } from './identity.js'
-import { createTransport } from './transport.js'
+import { fold, lobby, seatOf, status, COLS, ROWS, landingRow } from './fold.js'
+import { tagsFor } from '../lib/discover.js'
+import { dataSetsOf, foldByow, lobbyByow } from './fold-byow.js'
+import { loadIdentity, signPiece, verifyAll } from '../lib/identity.js'
+import { createTransport } from '../lib/transport.js'
+import { clearDescriptor, hasWallet, provisionPlayer } from '../lib/wallet-byow.js'
 
 const APP = 'foc-connect-four' // domain-separation tag, signed into every piece
 const idx = (col, row) => col * ROWS + row
 const SEAT_NAME = { X: 'Red', O: 'Yellow' }
 const seatName = (s) => (s == null ? s : SEAT_NAME[s])
 const pretty = (line) => String(line).replace(/\bX\b/g, 'Red').replace(/\bO\b/g, 'Yellow')
-
-// Lowest empty row in `col` for a board snapshot, or -1 when full.
-function landingRow(board, col) {
-  for (let row = 0; row < ROWS; row++) {
-    if (board[idx(col, row)] == null) return row
-  }
-  return -1
-}
 
 const labelEl = document.getElementById('transport-label')
 labelEl.textContent = 'connecting to shared storage…'
@@ -121,10 +122,10 @@ try {
 // id so two tabs in one browser can face each other (and keep their seats
 // across reloads).
 function tabScope() {
-  let id = sessionStorage.getItem('ttt-tab-id')
+  let id = sessionStorage.getItem('c4-tab-id')
   if (id == null) {
     id = crypto.randomUUID()
-    sessionStorage.setItem('ttt-tab-id', id)
+    sessionStorage.setItem('c4-tab-id', id)
   }
   return id
 }
@@ -136,8 +137,34 @@ const params = new URLSearchParams(location.search)
 const gameId = params.get('game')
 const $ = (id) => document.getElementById(id)
 
+// BYOW (schema v2): each player writes to their own data set; a game is
+// (game id, root data set) and the invite link carries both. The fold
+// follows the seat-owner sequencing rules in fold-byow.js. Otherwise the
+// page is the v1 single-shared-log game.
+const byow = typeof transport.addDataSet === 'function'
+const V = byow ? 2 : 1
+const root = byow ? (params.get('x') ?? transport.me?.ds ?? null) : null
+const fromBlock = params.get('from') // block the game was created at: where discovery starts
+if (byow && params.get('o')) transport.addDataSet(params.get('o'))
+let discovery = { hints: [], failed: [] } // last chain-event scan, for the meta line
+if (byow) {
+  $('intro').textContent = 'Bring your own wallet: every disc you drop is a signed JSON piece '
+    + 'in a data set your wallet pays for on Filecoin Onchain Cloud, and your opponent\'s moves live in theirs. '
+    + 'Both pages read both data sets straight from the chain and fold them with the same rules: illegal, '
+    + 'out-of-turn, and impostor pieces are ignored everywhere. Nothing is ever mutated and there is no server. '
+    + 'A move takes about a minute to settle; yours shows at once, your opponent\'s arrives on the next poll.'
+}
+const foldGame = (pieces) => (byow ? foldByow(gameId, root, pieces) : fold(gameId, pieces))
+const foldLobby = (pieces) => (byow ? lobbyByow(pieces) : lobby(pieces))
+const gameHref = (g) => {
+  if (!byow) return `?game=${encodeURIComponent(g.game)}`
+  const hint = discovery.hints.find((h) => h.ds === g.root && h.tags.type === 'create')
+  const from = hint == null ? '' : `&from=${hint.block}`
+  return `?game=${encodeURIComponent(g.game)}&x=${encodeURIComponent(g.root)}${from}`
+}
+
 let pieces = []
-let busy = null // label of the in-flight append, e.g. 'dropping your Red'
+let busy = null // label of the in-flight append, e.g. 'placing your X'
 let busyStage = null // transport progress: uploading / stored / submitted
 let pendingMove = null // { col, row, seat, sentAt } shown optimistically until the log confirms it
 const PENDING_TIMEOUT_MS = 3 * 60000 // give up on a submitted move after 3 minutes
@@ -148,11 +175,42 @@ let lastNotifiedSeq = -1
 if (transport.writeExpiry) {
   const banner = $('banner')
   if (transport.writeExpiry < Date.now()) {
-    banner.textContent = 'the demo write key has expired — games are read-only until the publisher re-arms it'
+    banner.textContent = byow
+      ? 'your session key has expired — reconnect your wallet to play'
+      : 'the demo write key has expired — games are read-only until the publisher re-arms it'
     banner.hidden = false
   } else if (transport.writeExpiry < Date.now() + 3 * 3600000) {
-    banner.textContent = `heads up: the demo write key expires ${new Date(transport.writeExpiry).toLocaleString()}`
+    banner.textContent = `heads up: your write key expires ${new Date(transport.writeExpiry).toLocaleString()}`
     banner.hidden = false
+  }
+}
+
+// BYOW onboarding: with no descriptor (or an expired one) the page is a
+// spectator and offers to make one from the connected wallet. Every stage
+// is shown; every failure names its step. Success reloads into play mode.
+const needsWallet = byow && (transport.me == null || (transport.writeExpiry && transport.writeExpiry < Date.now()))
+if (needsWallet) {
+  $('wallet-row').hidden = false
+  const status = $('wallet-status')
+  const connect = $('connect')
+  if (!hasWallet()) {
+    connect.disabled = true
+    status.textContent = 'no browser wallet found — install MetaMask (or any EIP-1193 wallet) on Filecoin calibration to play; you can still watch games'
+  }
+  connect.onclick = async () => {
+    connect.disabled = true
+    status.classList.remove('error')
+    try {
+      await clearDescriptor()
+      const me = await provisionPlayer({ onProgress: (stage) => { status.textContent = `${stage}…` } })
+      status.textContent = `ready: your data set #${me.ds}, reloading`
+      location.reload()
+    } catch (err) {
+      console.error(err)
+      status.textContent = `could not set up (${err?.message ?? err}) — fix and try again`
+      status.classList.add('error')
+      connect.disabled = false
+    }
   }
 }
 
@@ -161,11 +219,14 @@ function renderLobby() {
   const create = $('create')
   create.disabled = busy != null
   create.textContent = busy ?? 'create a game'
-  const games = lobby(pieces)
+  const games = foldLobby(pieces)
   $('lobby-empty').hidden = games.length > 0
-  const mine = games.filter((g) => seatOf(g, token) != null)
-  const open = games.filter((g) => seatOf(g, token) == null && g.seats.O == null)
-  const rest = games.filter((g) => seatOf(g, token) == null && g.seats.O != null)
+  const joined = (g) => seatOf(g, token) != null || (g.joins ?? []).some((j) => j.token === token)
+  const mine = games.filter((g) => joined(g))
+  const open = games.filter((g) => !joined(g) && g.seats.O == null)
+  const rest = games.filter((g) => !joined(g) && g.seats.O != null)
+  create.disabled = busy != null || (byow && transport.me == null)
+  if (byow && transport.me == null) create.textContent = 'spectating: connect a wallet to play'
   $('games').replaceChildren(
     ...lobbySection('your games', mine),
     ...lobbySection('open to join', open.slice(0, 15), open.length),
@@ -189,7 +250,7 @@ function lobbyRow(g) {
     li.classList.add('your-turn')
   }
   const a = document.createElement('a')
-  a.href = `?game=${encodeURIComponent(g.game)}`
+  a.href = gameHref(g)
   a.textContent = g.name ?? g.game
   const span = document.createElement('span')
   span.className = 'meta'
@@ -198,7 +259,44 @@ function lobbyRow(g) {
   return li
 }
 
-function renderBoard(board, state, seat) {
+function renderGame() {
+  $('game').hidden = false
+  const state = foldGame(pieces)
+  const seat = seatOf(state, token)
+  const iJoined = byow && (state.joins ?? []).some((j) => j.token === token)
+  const joinable = seat == null && state.seats.X != null && state.seats.O == null && !iJoined
+    && (!byow || transport.me != null)
+  const join = $('join')
+  join.hidden = !joinable
+  join.disabled = busy != null
+  // v2: X's first move ratifies the first joiner. Until then O is a candidate.
+  const ratifying = byow && seat === 'X' && !state.ratified && state.joins.length > 0
+  const playable = state.seats.O != null || ratifying
+  renderByowMeta(state, seat, iJoined)
+  $('rematch').hidden = !(state.winner != null && seat != null && busy == null)
+  $('notify').hidden = !('Notification' in window) || Notification.permission !== 'default'
+    || seat == null || state.winner != null
+  $('board').replaceChildren(...renderBoard(state, seat, playable, ratifying))
+  const yourTurn = seat != null && seat === state.next && state.winner == null
+    && playable && busy == null && pendingMove == null
+  document.title = yourTurn ? '● your move — connect four' : 'connect four on a piece log'
+  if (yourTurn && state.seq !== lastNotifiedSeq && document.hidden
+    && 'Notification' in window && Notification.permission === 'granted') {
+    lastNotifiedSeq = state.seq
+    new Notification('your move — connect four', { body: pretty(status(state)) })
+  }
+  const statusEl = $('status')
+  statusEl.textContent = pretty(statusLine(state, seat, joinable, ratifying, iJoined))
+  statusEl.classList.toggle('error', busy == null && lastError != null)
+  statusEl.classList.toggle('busy', busy != null)
+  const waitingOnOpponent = busy == null && lastError == null && state.winner == null
+    && seat != null && state.seats.O != null && (seat !== state.next || pendingMove != null)
+  statusEl.classList.toggle('waiting', waitingOnOpponent)
+  $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
+}
+
+function renderBoard(state, seat, playable, ratifying) {
+  const board = state.board
   const cells = []
   for (let row = ROWS - 1; row >= 0; row--) {
     for (let col = 0; col < COLS; col++) {
@@ -206,19 +304,15 @@ function renderBoard(board, state, seat) {
       const cell = board[i]
       const div = document.createElement('div')
       div.className = 'cell'
-      const playable = seat != null && seat === state.next && state.winner == null
-        && state.seats.O != null && busy == null && pendingMove == null
-        && landingRow(board, col) >= 0
-      if (playable) {
+      const canDrop = seat != null && seat === state.next && state.winner == null
+        && playable && busy == null && pendingMove == null && landingRow(board, col) >= 0
+      if (canDrop) {
         div.classList.add('drop')
-        div.onclick = () => {
-          const r = landingRow(board, col)
-          append(
-            { v: 1, type: 'move', game: gameId, seq: state.seq, col },
-            `dropping your ${seatName(seat)}`,
-            { col, row: r, seat, sentAt: Date.now() },
-          )
-        }
+        div.onclick = () => append(
+          movePayload(state, col, ratifying),
+          ratifying ? `seating ${state.joins[0].token.slice(0, 8)}… as Yellow, dropping your Red` : `dropping your ${seatName(seat)}`,
+          { col, row: landingRow(board, col), seat, sentAt: Date.now() },
+        )
       }
       const isPendingHere = pendingMove != null && pendingMove.col === col && pendingMove.row === row
       if (cell != null || isPendingHere) {
@@ -235,37 +329,38 @@ function renderBoard(board, state, seat) {
   return cells
 }
 
-function renderGame() {
-  $('game').hidden = false
-  const state = fold(gameId, pieces)
-  const seat = seatOf(state, token)
-  const joinable = seat == null && state.seats.X != null && state.seats.O == null
-  const join = $('join')
-  join.hidden = !joinable
-  join.disabled = busy != null
-  $('rematch').hidden = !(state.winner != null && seat != null && busy == null)
-  $('notify').hidden = !('Notification' in window) || Notification.permission !== 'default'
-    || seat == null || state.winner != null
-  $('board').replaceChildren(...renderBoard(state.board, state, seat))
-  const yourTurn = seat != null && seat === state.next && state.winner == null
-    && state.seats.O != null && busy == null && pendingMove == null
-  document.title = yourTurn ? '● your move — connect four' : 'connect four on a piece log'
-  if (yourTurn && state.seq !== lastNotifiedSeq && document.hidden
-    && 'Notification' in window && Notification.permission === 'granted') {
-    lastNotifiedSeq = state.seq
-    new Notification('your move — connect four', { body: pretty(status(state)) })
-  }
-  const statusEl = $('status')
-  statusEl.textContent = pretty(statusLine(state, seat, joinable))
-  statusEl.classList.toggle('error', busy == null && lastError != null)
-  statusEl.classList.toggle('busy', busy != null)
-  const waitingOnOpponent = busy == null && lastError == null && state.winner == null
-    && seat != null && state.seats.O != null && (seat !== state.next || pendingMove != null)
-  statusEl.classList.toggle('waiting', waitingOnOpponent)
-  $('log-info').textContent = `${state.applied} pieces applied, ${state.ignored} ignored`
+function movePayload(state, col, ratifying) {
+  if (!byow) return { v: 1, type: 'move', game: gameId, seq: state.seq, col }
+  const move = { v: 2, type: 'move', game: gameId, seq: state.seq, prev: state.lastRef, col }
+  if (!ratifying) return move
+  const join = state.joins[0]
+  return { ...move, prev: join.ref, o: { token: join.token, ds: join.ds } }
 }
 
-function statusLine(state, seat, joinable) {
+// BYOW-only affordances: which data sets this board is folded from, read
+// problems, disputes (a piece vanished from its data set), and the
+// link-back fallback O can send if chain-event discovery is unavailable.
+function renderByowMeta(state, seat, iJoined) {
+  const meta = $('byow-meta')
+  if (!byow) return
+  meta.hidden = false
+  const sets = dataSetsOf(state)
+  for (const ds of sets) transport.addDataSet(ds)
+  const problems = transport.problems()
+  const disputes = transport.disputes()
+  const lines = [`folded from data set${sets.length === 1 ? '' : 's'} ${sets.map((d) => `#${d}`).join(', ')}`]
+  if (state.homes.O != null) lines.push(`X writes to #${state.homes.X}, O writes to #${state.homes.O}`)
+  if (fromBlock == null) lines.push('invite has no start block: opponent discovery falls back to the link-back button')
+  if (discovery.failed.length > 0) lines.push(`chain scan skipped ${discovery.failed.length} block range(s) (${discovery.failed[0].error})`)
+  if (problems.length > 0) lines.push(`cannot read ${problems.map((p) => `#${p.ds} (${p.error})`).join('; ')} — showing last known pieces`)
+  if (disputes.length > 0) lines.push(`DISPUTED: ${disputes.length} piece(s) were removed from their data set after this browser saw them; the board keeps them`)
+  meta.textContent = lines.join('. ')
+  meta.classList.toggle('error', problems.length > 0 || disputes.length > 0)
+  const back = $('link-back')
+  back.hidden = !(iJoined && !state.ratified)
+}
+
+function statusLine(state, seat, joinable, ratifying = false, iJoined = false) {
   if (busy != null && busyStage != null) return `${busy} — ${busyStage}`
   if (busy != null) return `${busy}`
   if (pendingMove != null) {
@@ -274,6 +369,8 @@ function statusLine(state, seat, joinable) {
     return 'move sent — finalizing on-chain'
   }
   if (lastError != null) return lastError
+  if (ratifying) return `${state.joins.length} joined — your first move seats the first joiner as Yellow`
+  if (iJoined && !state.ratified) return 'you joined — Red seats you with their first move'
   if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
     return `${status(state)} — you are ${seat}, waiting for your opponent`
   }
@@ -295,15 +392,39 @@ async function verifiedPieces(raw) {
     if (p == null || typeof p !== 'object') return null
     const ok = verdicts.get(p)
     if (ok == null) return null
-    // Domain separation: only pieces signed for this app and this log count.
-    return ok.app === APP && ok.log === transport.logId ? ok : null
+    if (ok.app !== APP) return null
+    // Domain separation. v1: one shared log, so the log id must match this
+    // transport's. v2: every piece names its home data set and the fold
+    // checks it against where the piece was read from.
+    if (!byow) return ok.log === transport.logId ? ok : null
+    if (ok.v !== 2) return null
+    return ok
   })
 }
 
+// Discovery through chain events (BYOW only): in a game, find every data
+// set holding a piece tagged with this game id, scanning from the create
+// block in the invite; in the lobby, find recent creates. Pure hints; the
+// fold verifies whatever they point at. Failures show in the meta line.
+async function discoverPeers() {
+  if (!byow) return
+  try {
+    if (gameId != null && fromBlock != null) {
+      discovery = await transport.discover({ app: APP, game: gameId, from: fromBlock })
+    } else if (gameId == null) {
+      discovery = await transport.discover({ app: APP })
+    }
+  } catch (err) {
+    console.error(err)
+    discovery = { hints: discovery.hints, failed: [{ error: err?.message?.slice(0, 80) ?? String(err) }] }
+  }
+}
+
 async function refresh() {
+  await discoverPeers()
   pieces = await verifiedPieces(await transport.list())
   if (gameId != null && pendingMove != null) {
-    const board = fold(gameId, pieces).board
+    const board = foldGame(pieces).board
     const landed = board[idx(pendingMove.col, pendingMove.row)]
     if (landed === pendingMove.seat) {
       pendingMove = null
@@ -317,7 +438,7 @@ async function refresh() {
   }
   if (gameId != null) {
     const oldBoard = prevSnapshot
-    const newBoard = fold(gameId, pieces).board
+    const newBoard = foldGame(pieces).board
     if (oldBoard != null && oldBoard.some((cell, i) => cell !== newBoard[i])) prevBoard = oldBoard
     prevSnapshot = newBoard
   }
@@ -334,10 +455,11 @@ async function append(payload, label, move = null) {
   render()
   try {
     const signed = await signPiece({ ...payload, app: APP, log: transport.logId }, identity)
+    const tags = byow ? tagsFor(APP, payload.game, payload.type) : undefined
     await transport.append(signed, (stage) => {
       busyStage = stage
       render()
-    })
+    }, tags)
     busy = null
     busyStage = null
     // pendingMove stays until refresh() sees the move in the log
@@ -354,10 +476,18 @@ async function append(payload, label, move = null) {
   }
 }
 
-function newGame(name) {
+async function newGame(name) {
   const game = `game-${crypto.randomUUID()}`
-  return append({ v: 1, type: 'create', game, name }, 'creating game')
-    .then((ok) => { if (ok) location.search = `?game=${encodeURIComponent(game)}` })
+  // The invite carries the block the game was created after, so joiners'
+  // clients and the creator's own scan start there and never earlier.
+  const from = byow ? String(await transport.blockNumber()) : null
+  const ok = await append({ v: V, type: 'create', game, name }, 'creating game')
+  if (!ok) return
+  if (!byow) {
+    location.search = `?game=${encodeURIComponent(game)}`
+    return
+  }
+  location.search = `?game=${encodeURIComponent(game)}&x=${encodeURIComponent(transport.me.ds)}&from=${from}`
 }
 
 $('create').onclick = () => {
@@ -365,7 +495,25 @@ $('create').onclick = () => {
   newGame(name)
 }
 
-$('join').onclick = () => append({ v: 1, type: 'join', game: gameId }, 'joining as Yellow')
+$('join').onclick = async () => {
+  const state = foldGame(pieces)
+  const payload = byow ? { v: 2, type: 'join', game: gameId, prev: state.lastRef } : { v: 1, type: 'join', game: gameId }
+  if (!(await append(payload, 'joining as Yellow'))) return
+  if (byow) {
+    // Make this tab's own URL the link-back, so a plain share carries O's data set.
+    const url = new URL(location.href)
+    url.searchParams.set('o', transport.me.ds)
+    history.replaceState(null, '', url)
+  }
+}
+
+$('link-back').onclick = async () => {
+  const url = new URL(location.href)
+  url.searchParams.set('o', transport.me.ds)
+  await navigator.clipboard.writeText(url.toString())
+  $('link-back').textContent = 'copied!'
+  setTimeout(() => { $('link-back').textContent = 'copy link for X' }, 1500)
+}
 
 $('rematch').onclick = () => newGame('rematch')
 
@@ -384,7 +532,7 @@ $('share').onclick = async () => {
 // lobby or on finished games. The countdown re-renders once a second.
 function pollDelay() {
   if (gameId == null) return 12000
-  const state = fold(gameId, pieces)
+  const state = foldGame(pieces)
   if (state.winner != null) return 20000
   return 4000
 }
