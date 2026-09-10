@@ -33,7 +33,7 @@ import {
   getActivePiecesByCursor, getDataSet, getExpirations, getPDPProvider, http, Synapse,
 } from './foc-deps.js'
 import { scan, TAG_APP, TAG_GAME, TAG_TYPE } from './discover.js'
-import { homeLog } from './fold-byow.js'
+import { homeLog } from './byow-engine.js'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 const MAX_PIECE_BYTES = 8192 // a game piece is ~300 bytes; refuse griefer blobs before buffering

@@ -77,11 +77,11 @@
 
 <script type="module">
 import { fold, lobby, seatOf, status } from './fold.js'
-import { tagsFor } from './discover.js'
+import { tagsFor } from '../lib/discover.js'
 import { dataSetsOf, foldByow, lobbyByow } from './fold-byow.js'
-import { loadIdentity, signPiece, verifyAll } from './identity.js'
-import { createTransport } from './transport.js'
-import { clearDescriptor, hasWallet, provisionPlayer } from './wallet-byow.js'
+import { loadIdentity, signPiece, verifyAll } from '../lib/identity.js'
+import { createTransport } from '../lib/transport.js'
+import { clearDescriptor, hasWallet, provisionPlayer } from '../lib/wallet-byow.js'
 
 const APP = 'foc-ttt' // domain-separation tag, signed into every piece
 

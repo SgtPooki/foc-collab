@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { seatOf, status } from './fold.js'
 import { dataSetsOf, foldByow, homeLog } from './fold-byow.js'
-import { generateIdentity, signPiece, verifyAll } from './identity.js'
+import { generateIdentity, signPiece, verifyAll } from '../lib/identity.js'
 
 const APP = 'foc-ttt'
 const G = 'game-byow'

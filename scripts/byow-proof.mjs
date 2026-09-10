@@ -22,10 +22,10 @@
  */
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { tagsFor } from '../games/tic-tac-toe/discover.js'
-import { generateIdentity, signPiece, verifyAll } from '../games/tic-tac-toe/identity.js'
+import { tagsFor } from '../games/lib/discover.js'
+import { generateIdentity, signPiece, verifyAll } from '../games/lib/identity.js'
 import { dataSetsOf, foldByow, homeLog } from '../games/tic-tac-toe/fold-byow.js'
-import { createByowTransport } from '../games/tic-tac-toe/transport-byow.js'
+import { createByowTransport } from '../games/lib/transport-byow.js'
 
 const APP = 'foc-ttt'
 const [aPath, bPath] = process.argv.slice(2)

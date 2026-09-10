@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Build the publishable tic-tac-toe page: bundle the FOC deps from the
- * pinned node_modules (no runtime CDN), copy the page sources, and inject
- * the shared-storage config block.
+ * Build one game's publishable page: bundle the FOC deps from the pinned
+ * node_modules (no runtime CDN), copy the game's sources plus the shared
+ * modules from games/lib flattened next to them, and inject the config
+ * block.
  *
  * Usage:
- *   node scripts/build-page.mjs <out-dir> [config.json]
+ *   node scripts/build-page.mjs <out-dir> [config.json] [--game <name>]
  *
- * Without a config file the build is a local-transport page (dev/demo).
- * The config file is the JSON printed by scripts/setup-game-log.mjs.
+ * --game defaults to tic-tac-toe. Without a config file the build is a
+ * local-transport page (dev/demo). A BYOW config is { "mode": "byow" }.
  */
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -16,33 +17,34 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const src = path.join(root, 'games/tic-tac-toe')
-const [outDir, configPath] = process.argv.slice(2)
+const args = process.argv.slice(2)
+const gameFlag = args.indexOf('--game')
+const game = gameFlag === -1 ? 'tic-tac-toe' : args.splice(gameFlag, 2)[1]
+const [outDir, configPath] = args
 if (!outDir) {
-  console.error('usage: node scripts/build-page.mjs <out-dir> [config.json]')
+  console.error('usage: node scripts/build-page.mjs <out-dir> [config.json] [--game <name>]')
   process.exit(1)
 }
+const src = path.join(root, 'games', game)
+const lib = path.join(root, 'games/lib')
 
 fs.rmSync(outDir, { recursive: true, force: true })
 fs.mkdirSync(outDir, { recursive: true })
 
 execFileSync('npx', [
-  'esbuild', path.join(src, 'foc-deps.js'),
+  'esbuild', path.join(lib, 'foc-deps.js'),
   '--bundle', '--format=esm', '--minify',
   `--outfile=${path.join(outDir, 'vendor-foc.js')}`,
 ], { cwd: root, stdio: 'inherit' })
 
-for (const f of ['index.html', 'fold.js', 'fold-byow.js', 'discover.js', 'identity.js', 'transport.js', 'transport-foc.js']) {
-  fs.copyFileSync(path.join(src, f), path.join(outDir, f))
+const isSource = (f) => f.endsWith('.js') && !f.endsWith('.test.js') && f !== 'foc-deps.js'
+// Shared modules: the page gets copies pointed at the bundle instead of node_modules.
+for (const f of fs.readdirSync(lib).filter(isSource)) {
+  fs.writeFileSync(path.join(outDir, f), fs.readFileSync(path.join(lib, f), 'utf8').replaceAll("from './foc-deps.js'", "from './vendor-foc.js'"))
 }
-// The BYOW transport and wallet flow are shared with node (proof scripts
-// import them straight from node_modules through foc-deps.js); the page
-// gets copies pointed at the bundle.
-for (const f of ['transport-byow.js', 'wallet-byow.js']) {
-  fs.writeFileSync(
-    path.join(outDir, f),
-    fs.readFileSync(path.join(src, f), 'utf8').replace("from './foc-deps.js'", "from './vendor-foc.js'"),
-  )
+// Game modules: imports of ../lib/x.js become ./x.js since everything is flat.
+for (const f of fs.readdirSync(src).filter((f) => f === 'index.html' || isSource(f))) {
+  fs.writeFileSync(path.join(outDir, f), fs.readFileSync(path.join(src, f), 'utf8').replaceAll("from '../lib/", "from './"))
 }
 
 if (configPath) {
@@ -55,4 +57,4 @@ if (configPath) {
   fs.writeFileSync(page, html)
 }
 
-console.log(`built ${outDir}${configPath ? ' (shared storage)' : ' (local transport only)'}`)
+console.log(`built ${game} at ${outDir}${configPath ? ' (configured)' : ' (local transport only)'}`)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fold, seatOf } from './fold.js'
+import { fold, seatOf } from '../tic-tac-toe/fold.js'
 import { canon, generateIdentity, pieceRef, signPiece, verifyAll, verifyPiece } from './identity.js'
 
 test('canon is order-insensitive and drops undefined', () => {
