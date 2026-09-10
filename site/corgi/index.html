@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>FOC Corgi</title>
+<meta name="description" content="A community pet whose life is the real funding runway of its own Filecoin Onchain Cloud storage. Feed it, adopt a corgi, keep the park alive.">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f7f3ec; --panel: #fffdf9; --ink: #221c17; --muted: #6b6259; --line: #e4dbcf;
+  --accent: #b5551d; --accent-ink: #ffffff; --ok: #2f7d4f; --warn: #b7791f; --bad: #b03a2e; --dead: #4a4440;
+  --radius: 14px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17130f; --panel: #221c17; --ink: #f2ebe1; --muted: #a89d90; --line: #3a3128;
+    --accent: #e0803a; --accent-ink: #17130f; --ok: #5cb27f; --warn: #e0a43c; --bad: #e06553; --dead: #9a918a;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); }
+main { max-width: 1040px; margin: 0 auto; padding: 20px 20px 64px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 12px; }
+header.top h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0; font-weight: 700; }
+header.top .tagline { flex-basis: 100%; margin: 0; color: var(--muted); }
+.badge { font-size: 13px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); white-space: nowrap; }
+.mono { font-family: var(--mono); font-size: 13px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-top: 20px; }
+.panel h2 { font-size: 20px; margin: 0 0 10px; letter-spacing: -0.01em; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+#banner { padding: 12px 16px; border-radius: 10px; margin-top: 12px; border: 1px solid var(--line); background: var(--panel); }
+#banner.error { border-color: var(--bad); color: var(--bad); }
+#banner[hidden] { display: none; }
+progress { width: 100%; height: 6px; accent-color: var(--accent); }
+
+.stage { position: relative; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); background: #cfe6f6; margin-top: 16px; }
+.stage canvas { display: block; width: 100%; height: 480px; touch-action: none; }
+@media (max-width: 640px) { .stage canvas { height: 340px; } }
+/* landscape phones: let the park fill the screen so the whole playground is visible */
+@media (orientation: landscape) and (max-height: 520px) { .stage canvas { height: calc(100svh - 12px); } }
+.stage:fullscreen { border: 0; border-radius: 0; background: #000; }
+.stage:fullscreen canvas { height: 100vh; }
+.stage .tools { position: absolute; left: 12px; bottom: 10px; display: flex; gap: 8px; }
+.stage .tools button { padding: 6px 10px; font-size: 13px; background: rgba(255,253,249,.9); color: #221c17; border-color: transparent; }
+.stage .chip { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.stage .chip span { background: rgba(255,253,249,.88); color: #221c17; border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.stage .hint { position: absolute; right: 12px; bottom: 10px; font-size: 12px; color: rgba(255,255,255,.85); text-shadow: 0 1px 2px rgba(0,0,0,.5); pointer-events: none; }
+#tooltip { position: absolute; pointer-events: none; background: rgba(34,28,23,.92); color: #f2ebe1; padding: 8px 10px; border-radius: 8px; font-size: 13px; max-width: 260px; transform: translate(12px, 12px); }
+#tooltip[hidden] { display: none; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#labels span { position: absolute; transform: translate(-50%, -100%); background: rgba(34,28,23,.78); color: #f6f1e8; font-size: 12px; line-height: 1; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+#labels span.mascot { background: rgba(181,85,29,.92); font-weight: 600; }
+#labels span.ghost { background: rgba(255,253,249,.92); color: #221c17; border: 1px dashed #6b6259; }
+body.dead .panel:not(.memorial), body.dead .status, body.dead header.top { filter: grayscale(.55); }
+.presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.presets button { display: grid; gap: 2px; text-align: left; padding: 8px 14px; min-width: 120px; }
+.presets button strong { font-size: 15px; }
+.presets button small { color: var(--muted); font-size: 12px; }
+.presets button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button.primary.big { padding: 12px 22px; font-size: 17px; border-radius: 12px; }
+.wall article { grid-template-columns: 64px 1fr; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--panel) 92%, var(--dead)); }
+.wall .epitaph { font-style: italic; }
+.stage.fallback canvas { display: none; }
+#stage-fallback { padding: 40px 20px; text-align: center; color: #221c17; }
+#stage-fallback[hidden] { display: none; }
+
+.status { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; margin-top: 16px; align-items: start; }
+@media (max-width: 760px) { .status { grid-template-columns: 1fr; } }
+.status h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.02em; }
+.status .lede { margin: 0 0 10px; }
+.vitals { display: grid; gap: 14px; }
+.vital label { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; margin-bottom: 4px; }
+.bar { height: 12px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--ok); transition: width .4s ease; }
+.bar.warn > i { background: var(--warn); }
+.bar.bad > i { background: var(--bad); }
+.bar.dead > i { background: var(--dead); }
+.ticks { position: relative; height: 28px; font-size: 11px; color: var(--muted); }
+.ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.ticks span.zone { top: 13px; font-weight: 600; }
+.stat { font-variant-numeric: tabular-nums; }
+.hintline { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.memorial { border-color: var(--dead); }
+.memorial h2 { color: var(--dead); }
+.countdown { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+form.feed { display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button, input[type=text] { font: inherit; border-radius: 10px; border: 1px solid var(--line); padding: 10px 14px; background: var(--panel); color: var(--ink); }
+input[type=text] { width: 120px; font-variant-numeric: tabular-nums; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.small { padding: 6px 12px; font-size: 14px; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+#feed-status { min-height: 24px; }
+#feed-status.error { color: var(--bad); }
+#feed-status.ok { color: var(--ok); }
+.yours { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; }
+.yours svg { width: 72px; height: auto; }
+.yours p { margin: 0; }
+.onboard { border-left: 3px solid var(--warn); padding: 8px 12px; margin: 0; }
+.onboard ol { margin: 6px 0 0; padding-left: 20px; }
+
+.residents { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.residents article { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: center; }
+.residents article svg { width: 56px; height: auto; }
+.residents p { margin: 0; font-size: 14px; }
+
+table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 14px; }
+td:first-child { white-space: nowrap; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 13px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table-wrap { overflow-x: auto; }
+.wall { display: grid; gap: 10px; }
+.wall article { display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center; }
+.wall article svg { width: 64px; height: auto; }
+.wall p { margin: 0; }
+details summary { cursor: pointer; }
+footer { margin-top: 32px; font-size: 14px; color: var(--muted); }
+.empty { color: var(--muted); font-style: italic; }
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+<script type="application/json" id="corgi-config">{"chain":"calibration","payer":"0xB7e5E0eEcb922F464f41b04A1e48772816d41D23","fromBlock":4035200,"adoptionThreshold":"1"}</script>
+</head>
+<body>
+<main>
+  <header class="top">
+    <h1>FOC Corgi</h1>
+    <span class="badge" id="chain-badge">reading chain</span>
+    <span class="badge" id="gen-badge">generation ?</span>
+    <a class="mono" id="payer-link" href="#" target="_blank" rel="noopener">payer</a>
+    <p class="tagline">This dog is the live funding clock of its own Filecoin storage. If nobody feeds it, it dies, and so does this page.</p>
+  </header>
+
+  <div id="banner">
+    <div id="banner-text">Reading the corgi's account and feed log from the chain.</div>
+    <progress id="banner-progress" max="100" value="0"></progress>
+  </div>
+
+  <section class="stage" id="stage" aria-label="The corgi park">
+    <canvas id="park-canvas"></canvas>
+    <div id="stage-fallback" hidden>This browser could not start WebGL, so the park is not drawn. The corgi's state below is still live.</div>
+    <div class="chip"><span id="chip-gen">generation ?</span><span id="chip-park">park: reading</span></div>
+    <div class="hint" id="stage-hint">drag to look around, tap a corgi to see whose it is</div>
+    <div class="tools"><button type="button" id="fullscreen">Fullscreen</button></div>
+    <div id="tooltip" hidden></div>
+    <div id="labels" aria-hidden="true"></div>
+  </section>
+
+  <section class="status">
+    <div>
+      <h2 id="headline">Waiting for the chain</h2>
+      <p class="lede" id="lede"></p>
+      <div class="actions">
+        <button type="button" class="small" id="share">Copy status to share</button>
+        <a class="small" href="#feed-panel">Feed it</a>
+      </div>
+    </div>
+    <div class="vitals">
+      <div class="vital">
+        <label><span>Life: time left before it dies</span><strong class="stat" id="life-days"></strong></label>
+        <div class="bar" id="life-bar"><i style="width:0%"></i></div>
+        <div class="ticks" id="life-ticks"></div>
+        <p class="hintline" id="life-hint"></p>
+      </div>
+      <div class="vital">
+        <label><span>Mood: people who fed it this week</span><strong class="stat" id="mood-count"></strong></label>
+        <div class="bar" id="mood-bar"><i style="width:0%"></i></div>
+        <div class="ticks" id="mood-ticks"></div>
+        <p class="hintline" id="mood-hint">Money keeps it alive. Only people keep it happy.</p>
+      </div>
+      <p class="small muted" id="account-line"></p>
+    </div>
+  </section>
+
+  <section class="panel memorial" id="memorial-panel" hidden>
+    <h2 id="memorial-title">In memory</h2>
+    <p id="memorial-text"></p>
+    <div class="countdown" id="memorial-countdown"></div>
+    <p class="small muted" id="memorial-note"></p>
+  </section>
+
+  <section class="panel" id="feed-panel">
+    <h2 id="feed-title">Feed it 1 USDFC and adopt a corgi</h2>
+    <p class="small muted" id="feed-copy">Every feed is a USDFC deposit into the corgi's Filecoin Pay account, in your name, on-chain. It buys days of life. A single feed of <span id="adopt-threshold"></span> USDFC or more also puts a corgi drawn from your address into the park, for good.</p>
+    <form class="feed" id="feed-form">
+      <div class="row">
+        <button type="button" id="connect">Connect wallet</button>
+        <span class="mono" id="wallet-line"></span>
+      </div>
+      <div class="yours" id="yours" hidden></div>
+      <div class="onboard" id="onboard" hidden></div>
+      <div class="presets" id="presets">
+        <button type="button" class="preset" data-amount="0.25"><strong>Snack</strong><small>0.25 USDFC</small><small class="days"></small></button>
+        <button type="button" class="preset" data-amount="1" aria-pressed="true"><strong>Meal</strong><small>1 USDFC, adopts</small><small class="days"></small></button>
+        <button type="button" class="preset" data-amount="5"><strong>Feast</strong><small>5 USDFC, adopts</small><small class="days"></small></button>
+      </div>
+      <div class="row">
+        <label for="amount">or any amount (USDFC)</label>
+        <input type="text" id="amount" inputmode="decimal" value="1" autocomplete="off">
+        <button type="submit" class="primary big" id="feed" disabled>Feed the corgi</button>
+        <span class="small muted" id="amount-hint"></span>
+      </div>
+      <div id="feed-status" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Residents <span class="muted small" id="park-count"></span></h2>
+    <div class="residents" id="residents"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Feed log <span class="muted small" id="feed-total"></span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>When</th><th>What happened</th><th class="num">USDFC</th><th class="num">Life</th><th>Tx</th></tr></thead>
+        <tbody id="feed-log"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Memorial wall</h2>
+    <div class="wall" id="wall"></div>
+  </section>
+
+  <footer>
+    <details>
+      <summary>How this works</summary>
+      <p>The corgi is a payer account on the Filecoin Pay contract. Its storage providers are paid from that account by streaming rails, so the account's runway is the corgi's life. It is declared dead while funds remain (seven days of runway), so this memorial page keeps existing through the protocol's 30-day lockup tail. A deposit that lifts runway back over the line revives it as a new generation.</p>
+      <p>Mood is separate on purpose. It counts distinct addresses that fed the corgi in the last week, so one large deposit buys life but not happiness.</p>
+      <p>Every number on this page is a live chain read: the account struct and current block for life, and <code>DepositRecorded</code> and <code>WithdrawRecorded</code> events for the feed log, park, and generations. Nothing is simulated. If a read fails, the page says so.</p>
+      <p id="contracts-line" class="mono"></p>
+    </details>
+  </footer>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
