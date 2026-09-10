@@ -26,7 +26,10 @@ for (const game of ['tic-tac-toe', 'connect-four']) {
     '--game', game,
   ], { stdio: 'inherit' })
 }
-// The corgi is a recovered, self-contained build (see site/corgi/README.md); copied verbatim.
-fs.mkdirSync(path.join(outDir, 'corgi'), { recursive: true })
-for (const f of ['index.html', 'app.js']) fs.copyFileSync(path.join(root, 'site/corgi', f), path.join(outDir, 'corgi', f))
+// The corgi has its own bundler (three.js and all): apps/corgi/build.mjs.
+execFileSync('node', [
+  path.join(root, 'apps/corgi/build.mjs'),
+  path.join(outDir, 'corgi'),
+  path.join(root, 'apps/corgi/config.calibration.json'),
+], { stdio: 'inherit' })
 console.log(`site built at ${outDir}`)

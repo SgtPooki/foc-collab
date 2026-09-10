@@ -1,0 +1,6 @@
+{
+  "chain": "calibration",
+  "payer": "0xB7e5E0eEcb922F464f41b04A1e48772816d41D23",
+  "fromBlock": 4035200,
+  "adoptionThreshold": "1"
+}

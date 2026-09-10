@@ -4,15 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test games/*/*.test.js",
+    "test": "node --test games/*/*.test.js apps/corgi/*.test.js",
     "test:e2e": "node e2e/two-player.e2e.mjs",
     "test:e2e:byow": "node e2e/byow.e2e.mjs",
     "proof:byow": "node scripts/byow-proof.mjs .byow/player-a.json .byow/player-b.json",
-    "test:e2e:wallet": "node e2e/byow-wallet.e2e.mjs"
+    "test:e2e:wallet": "node e2e/byow-wallet.e2e.mjs",
+    "test:e2e:corgi": "node apps/corgi/e2e.mjs"
   },
   "dependencies": {
     "@filoz/synapse-core": "^0.8.1",
     "@filoz/synapse-sdk": "^1.2.1",
+    "three": "^0.182.0",
     "viem": "^2.56.1"
   },
   "devDependencies": {
