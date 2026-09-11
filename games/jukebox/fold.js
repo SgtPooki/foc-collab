@@ -1,6 +1,6 @@
 /**
- * The jukebox: coins are Filecoin Pay deposits into the jukebox's payer
- * account; picks are signed pieces in the jukebox's sponsored data set.
+ * The jukebox: coins are Filecoin Pay deposits into the jukebox's till
+ * (its own account); picks are signed pieces in the jukebox's sponsored data set.
  * Pure, no I/O.
  *
  * Inputs

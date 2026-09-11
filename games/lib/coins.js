@@ -18,6 +18,7 @@ export const DEPOSIT_EVENT = parseAbiItem(
   'event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
 )
 const LOG_CHUNK = 2000 // Glif calibration caps eth_getLogs at 2880 blocks
+const RPC_TIMEOUT_MS = 60_000 // a 2k-block getLogs on Glif regularly outlasts viem's 10s default
 const MIN_CHUNK = 250
 const REORG_MARGIN = 120
 
@@ -82,7 +83,7 @@ export async function readCoins(client, { payer, fromBlock, token = calibration.
 
 /** A public client on calibration for reads. */
 export function coinClient() {
-  return createPublicClient({ chain: calibration, transport: http() })
+  return createPublicClient({ chain: calibration, transport: http(undefined, { timeout: RPC_TIMEOUT_MS }) })
 }
 
 /**

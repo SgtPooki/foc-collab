@@ -14,12 +14,19 @@
  * below interleaves authors by the PieceAdded block number the page got
  * from discovery, which is a hint for reading, never fold input.
  *
- * Piece shape (schema v2, app 'foc-chat'):
+ * Piece shapes (schema v2, app 'foc-chat'):
  *   { v: 2, app: 'foc-chat', log, type: 'post', room, text, name?, token }
+ *   { v: 2, app: 'foc-chat', log, type: 'link', wallet, walletSig, token }
  *
- * Annotations expected from outside the signed body: src, pieceId, ref.
- * An author is (src, token): the data set plus the signing identity, so
- * guests sharing the sponsored data set are still distinct.
+ * A link binds a signing token to a wallet: the wallet signs the body
+ * (wallet-sig.js) and the fold trusts the `walletOk` annotation that
+ * verification adds. From then on that (data set, token)'s posts carry
+ * the wallet. It costs the guest one wallet prompt and one piece, no
+ * session key and no data set. Links are not room-scoped.
+ *
+ * Annotations expected from outside the signed body: src, pieceId, ref,
+ * walletOk. An author is (src, token): the data set plus the signing
+ * identity, so guests sharing the sponsored data set are still distinct.
  */
 export const V = 2
 export const APP = 'foc-chat'
@@ -50,12 +57,39 @@ export function authorKey(piece) {
   return `${piece.src}:${piece.token}`
 }
 
+/** A usable link: right schema, bound to its data set, wallet signature verified. */
+export function usableLink(piece) {
+  if (piece == null || typeof piece !== 'object') return false
+  if (piece.v !== V || piece.app !== APP || piece.type !== 'link') return false
+  if (typeof piece.src !== 'string' || piece.src === '' || idOf(piece) == null) return false
+  if (typeof piece.token !== 'string' || piece.token === '' || piece.log !== `byow:${piece.src}`) return false
+  if (typeof piece.wallet !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(piece.wallet)) return false
+  return piece.walletOk === true
+}
+
+/** author key -> wallet, the lowest piece id link per author winning (ids only grow, so it cannot be undercut). */
+export function linksOf(pieces) {
+  const links = new Map()
+  const best = new Map()
+  for (const p of pieces) {
+    if (!usableLink(p)) continue
+    const key = authorKey(p)
+    const id = idOf(p)
+    if (!best.has(key) || id < best.get(key)) {
+      best.set(key, id)
+      links.set(key, p.wallet)
+    }
+  }
+  return links
+}
+
 /**
  * Folds pieces into a room: posts grouped per author in piece-id order,
  * each with its rank (`seq`) among that author's posts. `ignored` counts
  * pieces that named this room but did not qualify.
  */
 export function foldRoom(room, pieces) {
+  const links = linksOf(pieces)
   const named = pieces.filter((p) => p != null && typeof p === 'object' && p.room === room)
   const posts = named.filter((p) => usablePost(p, room))
   const byAuthor = new Map()
@@ -75,10 +109,11 @@ export function foldRoom(room, pieces) {
       ref: p.ref,
       seq: i,
       name: typeof p.name === 'string' && p.name.trim() !== '' ? p.name.trim() : null,
+      wallet: links.get(author) ?? null,
       text: p.text,
     }))
   }
-  return { room, messages, authors: byAuthor.size, applied: posts.length, ignored: named.length - posts.length }
+  return { room, messages, authors: byAuthor.size, applied: posts.length, ignored: named.length - posts.length, links: links.size }
 }
 
 /**

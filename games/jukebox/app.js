@@ -1,6 +1,6 @@
 /**
- * Jukebox page: insert a coin (a USDFC deposit into the jukebox's payer
- * account, straight from your wallet), pick a song (a piece your wallet
+ * Jukebox page: insert a coin (a USDFC deposit into the jukebox's till,
+ * its own account, straight from your wallet), pick a song (a piece your wallet
  * signs, written to the jukebox data set through the authorizer), and
  * every listener folds the same queue. There is no shared clock, so the
  * page plays the queue in order from the first track this browser has
@@ -32,8 +32,16 @@ export async function mountJukebox() {
     $('status').textContent = 'this build has no jukebox data set'
     return
   }
-  const { ds, payer } = transport.sponsored
-  const fromBlock = Number(document.getElementById('foc-config') != null ? JSON.parse(document.getElementById('foc-config').textContent).sponsored?.from ?? 0 : 0)
+  const { ds } = transport.sponsored
+  // The till is the jukebox's own account: coins go there and nowhere
+  // else, so they never show up in another app's deposit log.
+  const config = JSON.parse(document.getElementById('foc-config')?.textContent ?? '{}')
+  const payer = config.till
+  const fromBlock = Number(config.sponsored?.from ?? 0)
+  if (payer == null) {
+    $('status').textContent = 'this build has no jukebox till'
+    return
+  }
   const client = coinClient()
   const provider = globalThis.ethereum ?? null
 
@@ -158,11 +166,13 @@ export async function mountJukebox() {
   }
 
   async function refresh() {
+    let scanError = null
     const [coins, raw] = await Promise.all([
-      readCoins(client, { payer, fromBlock }).catch((err) => { console.error(err); return { deposits } }),
+      readCoins(client, { payer, fromBlock }).catch((err) => { console.error(err); scanError = err; return { deposits } }),
       transport.list(),
     ])
     deposits = coins.deposits
+    if (scanError != null && lastError == null) lastError = `could not read the till (${scanError?.shortMessage ?? scanError?.message?.slice(0, 80) ?? scanError}); retrying`
     pieces = await verified(raw)
     state = foldJukebox(box, ds, deposits, pieces)
     if (pending != null) {
@@ -246,7 +256,7 @@ export async function mountJukebox() {
 
   labelEl.textContent = `${transport.label} — loading the queue…`
   await refresh()
-  labelEl.textContent = `${transport.label}: jukebox data set #${ds}, coins go to ${short(payer)}`
+  labelEl.textContent = `${transport.label}: jukebox data set #${ds}, till ${short(payer)}`
   setInterval(() => { if (busy == null) refresh().catch(console.error) }, 10000)
   setInterval(() => { if (pending != null && busy == null) render() }, 1000)
 }

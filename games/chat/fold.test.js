@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { displayOrder, foldRoom, rooms, usablePost } from './fold.js'
+import { displayOrder, foldRoom, linksOf, rooms, usablePost } from './fold.js'
 
 let ids = {}
 function post(src, token, room, text, extra = {}) {
@@ -61,4 +61,19 @@ test('rooms lists every room with counts, most posts first', () => {
   reset()
   const ps = [post('1', 'A', 'lobby', 'x'), post('1', 'A', 'game-9', 'y'), post('2', 'B', 'game-9', 'z')]
   assert.deepEqual(rooms(ps), [{ room: 'game-9', posts: 2 }, { room: 'lobby', posts: 1 }])
+})
+
+test('a verified link labels an author\'s posts with the wallet; unverified or later links do not win', () => {
+  reset()
+  const W = '0x1111111111111111111111111111111111111111'
+  const p1 = post('35446', 'g1', 'lobby', 'before the link')
+  const link = { v: 2, app: 'foc-chat', log: 'byow:35446', type: 'link', wallet: W, walletSig: '0x..', token: 'g1', walletOk: true, src: '35446', pieceId: 50n, ref: 'l1' }
+  const forged = { ...link, wallet: '0x2222222222222222222222222222222222222222', walletOk: false, pieceId: 51n, ref: 'l2' }
+  const later = { ...link, wallet: '0x3333333333333333333333333333333333333333', pieceId: 52n, ref: 'l3' }
+  const other = post('35446', 'g2', 'lobby', 'someone else')
+  const s = foldRoom('lobby', [p1, link, forged, later, other])
+  assert.equal(linksOf([link, forged, later]).get('35446:g1'), W)
+  assert.equal(s.messages.find((m) => m.text === 'before the link').wallet, W)
+  assert.equal(s.messages.find((m) => m.text === 'someone else').wallet, null)
+  assert.equal(s.links, 1)
 })
