@@ -17,6 +17,12 @@
   .card { border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; margin: 0.8rem 0; }
   .card h3 { margin: 0 0 0.3rem; font-size: 1rem; }
   .tag { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+  .row { display: flex; gap: 0.5rem; align-items: center; margin: 0.8rem 0; flex-wrap: wrap; }
+  button { padding: 0.35rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: transparent; font: inherit; color: inherit; cursor: pointer; }
+  #banner { background: #e5534b22; border: 1px solid #e5534b66; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+  #wallet-status.error { color: #e5534b; }
+  #dash ul:empty::after { content: 'none'; opacity: 0.5; font-size: 0.85rem; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -25,6 +31,22 @@
   <p class="meta">Every game here runs in your browser with Filecoin Onchain Cloud as the
   only backend. Moves are signed JSON pieces in data sets; boards are a
   deterministic fold over them. No server, no database, nothing to take down.</p>
+  <p class="meta" id="transport-label"></p>
+  <div class="row" id="wallet-row" hidden>
+    <button id="connect">connect wallet to play</button>
+    <span class="meta" id="wallet-status"></span>
+  </div>
+  <p id="banner" hidden></p>
+
+  <section id="dash" hidden>
+    <p class="meta" id="dash-status"></p>
+    <h2>Waiting on you</h2>
+    <ul id="waiting"></ul>
+    <h2>Your games</h2>
+    <ul id="yours"></ul>
+    <h2>Open to join</h2>
+    <ul id="open"></ul>
+  </section>
 
   <div class="card">
     <h3><a href="./tic-tac-toe/">tic-tac-toe</a> <span class="tag">bring your own wallet</span></h3>
@@ -76,5 +98,23 @@
     <li>Discovery reads PieceAdded events from the chain; no lobby server, no publisher key.</li>
   </ul>
 </main>
+
+<script type="module">
+// Every built game directory is self-contained (its games/lib modules
+// flattened next to it), so the landing page borrows the shared modules
+// from one of them and each game's fold from its own directory.
+import { mountDashboard } from './tic-tac-toe/dashboard-byow.js'
+import * as ttt from './tic-tac-toe/fold-byow.js'
+import { status as tttStatus } from './tic-tac-toe/fold.js'
+import * as c4 from './connect-four/fold-byow.js'
+import { status as c4Status } from './connect-four/fold.js'
+
+mountDashboard({
+  apps: [
+    { name: 'tic-tac-toe', app: 'foc-ttt', href: './tic-tac-toe/', lobby: ttt.lobbyByow, seatOf: ttt.seatOfHome, status: tttStatus, seatNames: { X: 'X', O: 'O' } },
+    { name: 'connect four', app: 'foc-connect-four', href: './connect-four/', lobby: c4.lobbyByow, seatOf: c4.seatOfHome, status: c4Status, seatNames: { X: 'Red', O: 'Yellow' } },
+  ],
+}).catch(console.error)
+</script>
 </body>
 </html>

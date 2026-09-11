@@ -16,7 +16,14 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const outDir = path.resolve(process.argv[2] ?? path.join(root, 'dist/site'))
 fs.rmSync(outDir, { recursive: true, force: true })
 fs.mkdirSync(outDir, { recursive: true })
-fs.copyFileSync(path.join(root, 'site/index.html'), path.join(outDir, 'index.html'))
+// The landing page is a BYOW page too (one wallet connection for the whole
+// site, a dashboard of the player's games across apps); it gets the same
+// config block build-page.mjs injects into a game page.
+const homeConfig = fs.readFileSync(path.join(root, 'site/home.config.json'), 'utf8').trim()
+fs.writeFileSync(
+  path.join(outDir, 'index.html'),
+  fs.readFileSync(path.join(root, 'site/index.html'), 'utf8').replace('</head>', `<script type="application/json" id="foc-config">${homeConfig}</script>\n</head>`),
+)
 fs.writeFileSync(path.join(outDir, '.nojekyll'), '')
 for (const game of ['tic-tac-toe', 'connect-four', 'chat']) {
   execFileSync('node', [
