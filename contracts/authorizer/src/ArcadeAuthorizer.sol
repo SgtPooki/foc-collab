@@ -9,6 +9,8 @@ import {IDataSetAuthorizer} from "./CooldownAuthorizer.sol";
 ///         limits the owner can tune without redeploying:
 ///           - per-signer cooldown (epochs between a signer's writes)
 ///           - per-operation piece count cap
+///           - a per-piece size cap, read from the CommP v2 CID the
+///             operation carries (padded size is 32 * 2^height)
 ///           - a global budget: at most `budgetPerWindow` pieces per
 ///             `windowEpochs` across all signers, so one data set's spend
 ///             is bounded whatever the crowd does
@@ -35,6 +37,7 @@ contract ArcadeAuthorizer is IDataSetAuthorizer {
         uint64 maxPiecesPerOp;
         uint64 budgetPerWindow;
         uint64 windowEpochs;
+        uint8 maxHeight; // largest piece tree height a guest may add; padded bytes = 32 << maxHeight
         bool paused;
     }
 
@@ -55,7 +58,7 @@ contract ArcadeAuthorizer is IDataSetAuthorizer {
     mapping(address => bool) public blocked;
 
     event Authorized(uint256 indexed dataSetId, address indexed signer, uint256 pieces, uint256 windowUsed);
-    event PolicySet(uint64 cooldownEpochs, uint64 maxPiecesPerOp, uint64 budgetPerWindow, uint64 windowEpochs, bool paused);
+    event PolicySet(uint64 cooldownEpochs, uint64 maxPiecesPerOp, uint64 budgetPerWindow, uint64 windowEpochs, uint8 maxHeight, bool paused);
     event Blocked(address indexed signer, bool blocked);
     event OwnerSet(address indexed owner);
 
@@ -74,19 +77,19 @@ contract ArcadeAuthorizer is IDataSetAuthorizer {
         owner = msg.sender;
         policy = policy_;
         emit OwnerSet(msg.sender);
-        emit PolicySet(policy_.cooldownEpochs, policy_.maxPiecesPerOp, policy_.budgetPerWindow, policy_.windowEpochs, policy_.paused);
+        emit PolicySet(policy_.cooldownEpochs, policy_.maxPiecesPerOp, policy_.budgetPerWindow, policy_.windowEpochs, policy_.maxHeight, policy_.paused);
     }
 
     // ------------------------------------------------------------ owner
 
     function setPolicy(Policy calldata policy_) external onlyOwner {
         policy = policy_;
-        emit PolicySet(policy_.cooldownEpochs, policy_.maxPiecesPerOp, policy_.budgetPerWindow, policy_.windowEpochs, policy_.paused);
+        emit PolicySet(policy_.cooldownEpochs, policy_.maxPiecesPerOp, policy_.budgetPerWindow, policy_.windowEpochs, policy_.maxHeight, policy_.paused);
     }
 
     function setPaused(bool paused) external onlyOwner {
         policy.paused = paused;
-        emit PolicySet(policy.cooldownEpochs, policy.maxPiecesPerOp, policy.budgetPerWindow, policy.windowEpochs, paused);
+        emit PolicySet(policy.cooldownEpochs, policy.maxPiecesPerOp, policy.budgetPerWindow, policy.windowEpochs, policy.maxHeight, paused);
     }
 
     function setBlocked(address signer, bool isBlocked) external onlyOwner {
@@ -123,6 +126,10 @@ contract ArcadeAuthorizer is IDataSetAuthorizer {
 
         (,, Cid[] memory pieces,,) = abi.decode(operationData, (uint256, uint256, Cid[], string[][], string[][]));
         if (pieces.length == 0 || pieces.length > p.maxPiecesPerOp) return false;
+        for (uint256 i = 0; i < pieces.length; i++) {
+            (bool ok, uint8 height) = pieceHeight(pieces[i].data);
+            if (!ok || height > p.maxHeight) return false;
+        }
 
         uint256 last = lastWrite[dataSetId][signer];
         if (last != 0 && block.number < last + p.cooldownEpochs) return false;
@@ -151,6 +158,45 @@ contract ArcadeAuthorizer is IDataSetAuthorizer {
     function nextWriteEpoch(uint256 dataSetId, address signer) external view returns (uint256) {
         uint256 last = lastWrite[dataSetId][signer];
         return last == 0 ? block.number : last + policy.cooldownEpochs;
+    }
+
+    /// The tree height of a CommP v2 piece CID: bytes are
+    /// 0x01 | codec varint | 0x1011 varint | digest-size varint | padding varint | height | 32-byte root.
+    /// Returns ok=false for anything that does not parse as that shape.
+    function pieceHeight(bytes memory cid) public pure returns (bool ok, uint8 height) {
+        if (cid.length < 5 || cid[0] != 0x01) return (false, 0);
+        uint256 i = 1;
+        bool fine;
+        (fine, i) = skipVarint(cid, i); // codec
+        if (!fine) return (false, 0);
+        uint256 code;
+        (fine, code, i) = readVarint(cid, i); // multihash code
+        if (!fine || code != 0x1011) return (false, 0);
+        uint256 size;
+        (fine, size, i) = readVarint(cid, i); // digest size
+        if (!fine || cid.length != i + size) return (false, 0);
+        (fine, i) = skipVarint(cid, i); // padding
+        if (!fine || i + 1 + 32 != cid.length) return (false, 0);
+        return (true, uint8(cid[i]));
+    }
+
+    function readVarint(bytes memory b, uint256 i) internal pure returns (bool, uint256, uint256) {
+        uint256 value;
+        uint256 shift;
+        for (uint256 n = 0; n < 10; n++) {
+            if (i >= b.length) return (false, 0, i);
+            uint8 c = uint8(b[i]);
+            i++;
+            value |= uint256(c & 0x7f) << shift;
+            if (c & 0x80 == 0) return (true, value, i);
+            shift += 7;
+        }
+        return (false, 0, i);
+    }
+
+    function skipVarint(bytes memory b, uint256 i) internal pure returns (bool, uint256) {
+        (bool fine,, uint256 next) = readVarint(b, i);
+        return (fine, next);
     }
 
     /// Same (v, r, s) handling as SignatureVerificationLib.recoverSigner.

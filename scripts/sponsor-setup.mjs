@@ -22,6 +22,7 @@
  *   SPONSOR_MAX_PIECES pieces per operation                 (default 1)
  *   SPONSOR_BUDGET     pieces per window across all guests (default 200)
  *   SPONSOR_WINDOW     window length in epochs              (default 2880, one day)
+ *   SPONSOR_MAX_HEIGHT largest piece tree height per piece   (default 10: 32 KiB padded)
  *   SPONSOR_SOURCE     data set metadata tag; a new tag makes a new data set
  *                      (default foc-collab-arcade; the paint board uses foc-collab-paint)
  */
@@ -49,6 +50,7 @@ const policy = {
   maxPiecesPerOp: BigInt(process.env.SPONSOR_MAX_PIECES ?? 1),
   budgetPerWindow: BigInt(process.env.SPONSOR_BUDGET ?? 200),
   windowEpochs: BigInt(process.env.SPONSOR_WINDOW ?? 2880),
+  maxHeight: Number(process.env.SPONSOR_MAX_HEIGHT ?? 10),
   paused: false,
 }
 
@@ -83,7 +85,7 @@ async function receipt(hash, timeoutMs = 10 * 60_000) {
 let authorizer = AUTHORIZER_ADDRESS
 if (!authorizer) {
   const artifact = JSON.parse(fs.readFileSync(path.join(root, 'contracts/authorizer/out/ArcadeAuthorizer.sol/ArcadeAuthorizer.json'), 'utf8'))
-  log(`deploying ArcadeAuthorizer from ${owner.address}: cooldown ${policy.cooldownEpochs} epochs, ${policy.maxPiecesPerOp} piece/op, ${policy.budgetPerWindow} pieces per ${policy.windowEpochs} epochs`)
+  log(`deploying ArcadeAuthorizer from ${owner.address}: cooldown ${policy.cooldownEpochs} epochs, ${policy.maxPiecesPerOp} piece/op, ${policy.budgetPerWindow} pieces per ${policy.windowEpochs} epochs, max height ${policy.maxHeight}`)
   const hash = await client.deployContract({ abi: artifact.abi, bytecode: artifact.bytecode.object, args: [fwss, policy] })
   log('deploy tx', hash)
   const r = await receipt(hash)
