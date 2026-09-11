@@ -34,9 +34,13 @@ for (const game of ['tic-tac-toe', 'connect-four', 'chat', 'paint', 'jukebox']) 
   ], { stdio: 'inherit' })
 }
 // The corgi has its own bundler (three.js and all): apps/corgi/build.mjs.
-execFileSync('node', [
-  path.join(root, 'apps/corgi/build.mjs'),
-  path.join(outDir, 'corgi'),
-  path.join(root, 'apps/corgi/config.calibration.json'),
-], { stdio: 'inherit' })
+// Two corgis: the original, and the arcade's, whose payer account funds
+// every guest write on the site (jukebox coins feed it).
+for (const [dir, config] of [['corgi', 'config.calibration.json'], ['corgi-arcade', 'config.arcade.json']]) {
+  execFileSync('node', [
+    path.join(root, 'apps/corgi/build.mjs'),
+    path.join(outDir, dir),
+    path.join(root, `apps/corgi/${config}`),
+  ], { stdio: 'inherit' })
+}
 console.log(`site built at ${outDir}`)
