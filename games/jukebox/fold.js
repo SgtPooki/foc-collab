@@ -25,7 +25,7 @@
  */
 export const V = 2
 export const APP = 'foc-jukebox'
-export const PRICE = 10n ** 18n // 1 USDFC a coin
+export const PRICE = 10n ** 16n // 0.01 USDFC a coin; an auction can replace the flat price later
 export const MAX_TITLE = 80
 
 const YT_ID = /^[A-Za-z0-9_-]{11}$/

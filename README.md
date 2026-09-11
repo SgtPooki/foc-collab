@@ -1,5 +1,7 @@
 # foc-collab
 
+![FOC-CADE](assets/foc-cade.jpg)
+
 Serverless multiplayer games and one tamagotchi with Filecoin Onchain
 Cloud (FOC) as the only backend. In the games, players append small
 signed JSON pieces to data sets from the browser and every client derives
@@ -99,3 +101,10 @@ Copy `.env.example` to `.env` and set `PRIVATE_KEY` (gitignored). Runtime
 configuration lives in the committed `config.env`; scripts and the publish
 skill source both: `set -a; . ./config.env; . ./.env; set +a`. Commands
 are listed in `CLAUDE.md`.
+
+## License
+
+Dual-licensed under the [Permissive License Stack](https://web.archive.org/web/20241127162157/https://www.protocol.ai/blog/announcing-the-permissive-license-stack/):
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT License](LICENSE-MIT)
+

@@ -2,6 +2,7 @@
   "name": "foc-collab",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0 OR MIT",
   "type": "module",
   "scripts": {
     "test": "node --test games/*/*.test.js apps/corgi/*.test.js",

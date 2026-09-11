@@ -36,7 +36,7 @@
         "windowEpochs": 2880,
         "maxHeight": 10
       },
-      "coin": "1 USDFC deposited to the jukebox till (its own wallet, separate from the arcade wallet and from any corgi)",
+      "coin": "0.01 USDFC deposited to the jukebox till (its own wallet, separate from the arcade wallet and from any corgi)",
       "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY SPONSOR_SOURCE=foc-collab-jukebox SPONSOR_BUDGET=100 node scripts/sponsor-setup.mjs",
       "till": "0x6D15ed940A0aaD981C5Ef712a98dEd35DC4448F1"
     }
