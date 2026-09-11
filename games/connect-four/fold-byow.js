@@ -7,7 +7,7 @@
 import { foldByow as engine, lobbyByow as engineLobby } from '../lib/byow-engine.js'
 import { COLS, ROWS, initialState, landingRow, resultOf } from './fold.js'
 
-export { dataSetsOf, homeLog, usable, V } from '../lib/byow-engine.js'
+export { dataSetsOf, homeLog, seatOfHome, usable, V } from '../lib/byow-engine.js'
 
 const idx = (col, row) => col * ROWS + row
 

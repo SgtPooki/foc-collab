@@ -16,8 +16,8 @@
  *
  *   - A game is identified by (game, root): the data set the creator wrote
  *     the `create` piece to. Lowest piece id `create` in the root wins X.
- *   - Any other token appends `join` to its own data set with
- *     prev = ref(create). Every such join is a candidate for O.
+ *   - Any other data set appends `join` with prev = ref(create). Every
+ *     such join is a candidate for O.
  *   - X's first move (seq 0) ratifies O: prev = ref(join), and `o`
  *     repeats the join's { token, ds } so a reader who only knows the root
  *     can discover O's data set. Lowest piece id among X's qualifying
@@ -28,6 +28,13 @@
  *   - Home binding is signed: log must equal `byow:<src>` where src is
  *     the data set the transport read the piece from. Replaying someone's
  *     signed piece into another data set changes nothing.
+ *
+ * A seat is owned by a home data set, not by a signing token. Writing to
+ * a data set already requires its owner's session key, so the data set is
+ * the player; the token only proves the piece was not altered in flight.
+ * The same wallet in a new browser (new token, same data set) is still the
+ * same player. `seats` keeps the token that wrote each seat's first piece
+ * for display; `homes` is what ownership checks use.
  *
  * Annotations expected from outside the signed body (added by the
  * transport and by signature verification, never by the author):
@@ -106,7 +113,16 @@ function placeMove(state, seat, piece, rules) {
 
 function joinMatchesRatification(join, move) {
   if (join == null || move.o == null || typeof move.o !== 'object') return false
-  return move.o.token === join.token && String(move.o.ds) === join.ds
+  return String(move.o.ds) === join.ds
+}
+
+/** The seat whose home data set is `ds`, or null. This is how a BYOW page learns who it is. */
+export function seatOfHome(state, ds) {
+  if (ds == null || state?.homes == null) return null
+  const home = String(ds)
+  if (state.homes.X === home) return 'X'
+  if (state.homes.O === home) return 'O'
+  return null
 }
 
 /** Folds pieces from any number of data sets into one game's state under `rules`. */
@@ -127,12 +143,11 @@ export function foldByow(game, root, pieces, rules) {
   }
 
   const joins = all
-    .filter((p) => p.type === 'join' && p.prev === create.ref && p.token !== create.token)
+    .filter((p) => p.type === 'join' && p.prev === create.ref && p.src !== rootId)
     .map((p) => ({ token: p.token, ds: p.src, ref: p.ref }))
   state = { ...state, joins, applied: state.applied + joins.length }
 
-  const ratifications = all.filter((p) => p.type === 'move' && p.src === rootId
-    && p.token === create.token && p.seq === 0)
+  const ratifications = all.filter((p) => p.type === 'move' && p.src === rootId && p.seq === 0)
   const hints = ratifications
     .map((p) => (typeof p.o?.ds === 'string' || typeof p.o?.ds === 'number' ? String(p.o.ds) : null))
     .filter((ds) => ds != null && ds !== '')
@@ -157,8 +172,7 @@ export function foldByow(game, root, pieces, rules) {
     if (state.winner != null) break
     const seat = state.next
     const move = all.find((p) => p.type === 'move' && p.src === state.homes[seat]
-      && p.token === state.seats[seat] && p.seq === state.seq && p.prev === state.lastRef
-      && rules.legal(state, p))
+      && p.seq === state.seq && p.prev === state.lastRef && rules.legal(state, p))
     if (move == null) break
     state = placeMove(state, seat, move, rules)
   }

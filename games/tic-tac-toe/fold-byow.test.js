@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { seatOf, status } from './fold.js'
-import { dataSetsOf, foldByow, homeLog, lobbyByow } from './fold-byow.js'
+import { dataSetsOf, foldByow, homeLog, lobbyByow, seatOfHome } from './fold-byow.js'
 
 const G = 'game-1'
 const A = 'token-alice'
@@ -74,6 +74,27 @@ test('create, join, ratify, play: both homes, converges regardless of listing or
   assert.equal(s.lastRef, m2.ref)
   assert.equal(s.ignored, 0)
   assert.deepEqual(dataSetsOf(s), [DS_A, DS_B])
+})
+
+test('a seat belongs to its home data set: a new signing token in the same data set is the same player', () => {
+  // The creator opens the game in another browser: fresh token, same wallet,
+  // same data set. Their ratification and every later move must still count.
+  reset()
+  const A2 = 'token-alice-other-browser'
+  const c = create(DS_A, A)
+  const j = join(DS_B, B, c.ref)
+  const r = ratify(DS_A, A2, 4, j)
+  const m1 = move(DS_B, B, 1, 0, r.ref)
+  const m2 = move(DS_A, A2, 2, 8, m1.ref)
+  const s = foldBoth([c, j, r, m1, m2])
+  assert.equal(seatOfHome(s, DS_A), 'X')
+  assert.equal(seatOfHome(s, DS_B), 'O')
+  assert.equal(seatOfHome(s, DS_C), null)
+  assert.deepEqual([s.board[4], s.board[0], s.board[8]], ['X', 'O', 'X'])
+  assert.equal(s.ignored, 0)
+  // A join from the root data set is not a join, whatever token signed it.
+  const selfJoin = join(DS_A, 'token-alice-again', c.ref)
+  assert.equal(foldBoth([c, selfJoin]).joins.length, 0)
 })
 
 test('before ratification, joiners are candidates, not O', () => {

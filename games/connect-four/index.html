@@ -92,7 +92,7 @@
 <script type="module">
 import { fold, lobby, seatOf, status, COLS, ROWS, landingRow } from './fold.js'
 import { tagsFor } from '../lib/discover.js'
-import { dataSetsOf, foldByow, lobbyByow } from './fold-byow.js'
+import { dataSetsOf, foldByow, lobbyByow, seatOfHome } from './fold-byow.js'
 import { loadIdentity, signPiece, verifyAll } from '../lib/identity.js'
 import { createTransport } from '../lib/transport.js'
 import { clearDescriptor, hasWallet, provisionPlayer } from '../lib/wallet-byow.js'
@@ -156,6 +156,11 @@ if (byow) {
 }
 const foldGame = (pieces) => (byow ? foldByow(gameId, root, pieces) : fold(gameId, pieces))
 const foldLobby = (pieces) => (byow ? lobbyByow(pieces) : lobby(pieces))
+// Who am I in a game: on BYOW the seat owner is my home data set (any browser
+// holding this wallet's session key is the same player); on the shared log it
+// is this browser's signing token.
+const mySeat = (state) => (byow ? seatOfHome(state, transport.me?.ds) : seatOf(state, token))
+const joinedByMe = (state) => byow && transport.me != null && (state.joins ?? []).some((j) => j.ds === transport.me.ds)
 const gameHref = (g) => {
   if (!byow) return `?game=${encodeURIComponent(g.game)}`
   const hint = discovery.hints.find((h) => h.ds === g.root && h.tags.type === 'create')
@@ -221,7 +226,7 @@ function renderLobby() {
   create.textContent = busy ?? 'create a game'
   const games = foldLobby(pieces)
   $('lobby-empty').hidden = games.length > 0
-  const joined = (g) => seatOf(g, token) != null || (g.joins ?? []).some((j) => j.token === token)
+  const joined = (g) => mySeat(g) != null || joinedByMe(g)
   const mine = games.filter((g) => joined(g))
   const open = games.filter((g) => !joined(g) && g.seats.O == null)
   const rest = games.filter((g) => !joined(g) && g.seats.O != null)
@@ -245,7 +250,7 @@ function lobbySection(title, games, total = games.length) {
 
 function lobbyRow(g) {
   const li = document.createElement('li')
-  const mine = seatOf(g, token)
+  const mine = mySeat(g)
   if (mine != null && mine === g.next && g.winner == null && g.seats.O != null) {
     li.classList.add('your-turn')
   }
@@ -262,8 +267,8 @@ function lobbyRow(g) {
 function renderGame() {
   $('game').hidden = false
   const state = foldGame(pieces)
-  const seat = seatOf(state, token)
-  const iJoined = byow && (state.joins ?? []).some((j) => j.token === token)
+  const seat = mySeat(state)
+  const iJoined = joinedByMe(state)
   const joinable = seat == null && state.seats.X != null && state.seats.O == null && !iJoined
     && (!byow || transport.me != null)
   const join = $('join')
@@ -310,7 +315,7 @@ function renderBoard(state, seat, playable, ratifying) {
         div.classList.add('drop')
         div.onclick = () => append(
           movePayload(state, col, ratifying),
-          ratifying ? `seating ${state.joins[0].token.slice(0, 8)}… as Yellow, dropping your Red` : `dropping your ${seatName(seat)}`,
+          ratifying ? `seating data set #${state.joins[0].ds} as Yellow, dropping your Red` : `dropping your ${seatName(seat)}`,
           { col, row: landingRow(board, col), seat, sentAt: Date.now() },
         )
       }
