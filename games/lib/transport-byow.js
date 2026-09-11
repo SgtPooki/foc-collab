@@ -102,9 +102,10 @@ async function openReader(client, ds) {
     ds: String(ds),
     payer: info.payer,
     serviceURL,
-    async entries() {
+    /** Active (pieceId, cid) pairs, ascending; `from` starts the walk at that piece id. */
+    async entries({ from } = {}) {
       const out = []
-      let cursor
+      let cursor = from
       for (;;) {
         const page = await getActivePiecesByCursor(client, { dataSetId, cursor, limit: 100n })
         for (const item of page.items) out.push({ pieceId: item.id, cid: String(item.cid) })
@@ -318,9 +319,32 @@ export async function createByowTransport(config = {}) {
     return readers.get(ds)
   }
 
-  async function listOne(ds) {
+  // Incremental sync: after a full listing, later polls page only from the
+  // highest active piece id seen (the contract's cursor is a piece id), so
+  // a data set with thousands of pieces costs one small read per poll. A
+  // full listing every FULL_EVERY polls (and on first sight) is what still
+  // notices a piece that was removed, which an incremental pass cannot.
+  const FULL_EVERY = 12
+  const active = new Map() // ds -> Map<pieceId string, cid> as of the last listing
+  const removedIds = new Map() // ds -> string[] as of the last full listing
+  let polls = 0
+  async function activeEntries(r, ds, full) {
+    const known = active.get(ds)
+    if (full || known == null) {
+      const entries = await r.entries()
+      active.set(ds, new Map(entries.map(({ pieceId, cid }) => [String(pieceId), cid])))
+      return { entries, full: true }
+    }
+    let high = -1n
+    for (const id of known.keys()) if (BigInt(id) > high) high = BigInt(id)
+    const fresh = await r.entries({ from: high + 1n })
+    for (const { pieceId, cid } of fresh) known.set(String(pieceId), cid)
+    const entries = [...known].map(([id, cid]) => ({ pieceId: BigInt(id), cid })).sort((a, b) => (a.pieceId < b.pieceId ? -1 : 1))
+    return { entries, full: false }
+  }
+  async function listOne(ds, full) {
     const r = await reader(ds)
-    const entries = await r.entries()
+    const { entries, full: listedAll } = await activeEntries(r, ds, full)
     const missing = entries.filter(({ cid }) => !bodies.has(cid))
     const BATCH = 8
     for (let i = 0; i < missing.length; i += BATCH) {
@@ -332,14 +356,15 @@ export async function createByowTransport(config = {}) {
         }
       }))
     }
-    const active = new Set()
+    const activeNow = new Set()
     seen[ds] ??= {}
     for (const { pieceId, cid } of entries) {
-      active.add(String(pieceId))
+      activeNow.add(String(pieceId))
       seen[ds][String(pieceId)] = cid
     }
     if (missing.length > 0 || entries.length > 0) persist()
-    const removed = Object.keys(seen[ds]).filter((id) => !active.has(id))
+    if (listedAll) removedIds.set(ds, Object.keys(seen[ds]).filter((id) => !activeNow.has(id)))
+    const removed = removedIds.get(ds) ?? []
     const annotate = (id, cid, extra) => {
       const body = bodies.get(cid)
       if (body == null || typeof body !== 'object') return null
@@ -390,10 +415,12 @@ export async function createByowTransport(config = {}) {
     async guestAddress() {
       return (await sponsor()).guest
     },
-    async list() {
+    async list({ full = false } = {}) {
+      const doFull = full || polls % FULL_EVERY === 0
+      polls++
       const results = await Promise.all([...known].map(async (ds) => {
         try {
-          const out = await listOne(ds)
+          const out = await listOne(ds, doFull)
           problems.delete(ds)
           return out
         } catch (err) {
