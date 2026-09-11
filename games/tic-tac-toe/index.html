@@ -310,10 +310,14 @@ function renderGame() {
   const yourTurn = seat != null && seat === state.next && state.winner == null
     && playable && busy == null && pendingMove == null
   document.title = yourTurn ? '● your move — tic-tac-toe' : 'tic-tac-toe on a piece log'
-  if (yourTurn && state.seq !== lastNotifiedSeq && document.hidden
+  // Notify when the player is not looking: a hidden tab, or a visible tab
+  // in a window that does not have focus (another app or window in front).
+  const away = document.hidden || !document.hasFocus()
+  if (yourTurn && state.seq !== lastNotifiedSeq && away
     && 'Notification' in window && Notification.permission === 'granted') {
     lastNotifiedSeq = state.seq
-    new Notification('your move — tic-tac-toe', { body: status(state) })
+    const n = new Notification('your move — tic-tac-toe', { body: status(state) })
+    n.onclick = () => { window.focus(); n.close() }
   }
   const statusEl = $('status')
   statusEl.textContent = statusLine(state, seat, joinable, ratifying, iJoined)
