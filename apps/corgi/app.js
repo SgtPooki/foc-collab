@@ -155,7 +155,7 @@ function showTooltip(hit) {
 function renderPark(s) {
   const p = ensurePark()
   $('chip-gen').textContent = `generation ${s.generation}`
-  $('chip-park').textContent = s.park.length ? `${plural(s.park.length, 'adopted corgi')} in the park` : 'the park is empty, adopt the first corgi'
+  $('chip-park').textContent = s.park.length ? `${plural(s.park.length, 'adopted corgi')} in the park` : 'no adopted corgis yet, be the first'
   if (!p) return
   p.setState({
     payer: s.payer, life: s.life, mood: s.mood, park: s.park,
@@ -190,8 +190,9 @@ function lifeCopy(s, clock) {
 function moodCopy(s) {
   const n = s.distinctFeeders
   if (s.life === 'dead') {
-    if (n === 0) return 'Nobody has fed it this week. Whoever feeds it next brings it back.'
-    return `${plural(n, 'person')} fed it this week. They are the ones who can bring it back.`
+    const revive = `A feed of at least ${usd(s.memorial.reviveNeeds, 4)} USDFC brings it back.`
+    if (n === 0) return `Nobody has fed it in the last ${foldConfig.moodWindowDays} days. ${revive}`
+    return `${plural(n, 'person')} fed it this week, not enough to revive it. ${revive}`
   }
   const company = s.park.length > 0 ? ` It has ${plural(s.park.length, 'adopted corgi')} for company.` : ''
   if (s.mood === 'lonely') return `Nobody has fed it in the last ${foldConfig.moodWindowDays} days, so it mopes even with money in the bank.${company}`
@@ -202,6 +203,7 @@ function moodCopy(s) {
 
 function nextLifeHint(s, rate) {
   if (rate <= 0n || s.life === 'unfunded') return ''
+  if (s.life === 'dead') return `Dead corgis do not thrive. ${usd(s.memorial.reviveNeeds, 4)} USDFC or more brings it back as generation ${s.generation + 1}.`
   const steps = [['critical', foldConfig.criticalDays], ['sick', foldConfig.sickDays], ['fine', foldConfig.thrivingDays]]
   const runwayDays = daysOf(s.runwayEpochs)
   for (const [from, days] of steps) {
@@ -239,11 +241,22 @@ function lifePercent(days) {
   }
   return 100
 }
+function lifeStat(s) {
+  if (s.life === 'unfunded') return { label: 'Life: time left before it dies', value: 'no spend', percent: 0 }
+  if (s.life === 'dead') {
+    const since = s.epoch - s.memorial.diedEpoch
+    return { label: 'Life: dead', value: since > 0 ? `${fmtDays(since)} ago` : 'just now', percent: 0 }
+  }
+  return { label: 'Life: time left before it dies', value: fmtDays(s.lifeEpochs), percent: lifePercent(daysOf(s.lifeEpochs)) }
+}
+
 function renderLife(s, account) {
-  $('life-days').textContent = s.life === 'unfunded' ? 'no spend' : fmtDays(s.lifeEpochs)
+  const stat = lifeStat(s)
+  $('life-label').textContent = stat.label
+  $('life-days').textContent = stat.value
   const bar = $('life-bar')
   bar.className = `bar ${barClass(s.life)}`
-  bar.querySelector('i').style.width = `${lifePercent(daysOf(s.lifeEpochs))}%`
+  bar.querySelector('i').style.width = `${stat.percent}%`
   const zones = lifeZones()
   const labels = ['critical', 'sick', 'fine', 'thriving']
   const ticks = zones.slice(1, 4).map(([d, p]) => `<span style="left:${p}%">${d}d</span>`)

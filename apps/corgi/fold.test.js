@@ -54,6 +54,17 @@ test('empty log, nothing stored: unfunded, lonely, generation 0', () => {
   assert.equal(s.runwayEpochs, Infinity)
 })
 
+test('no deposits seen but a long runway: alive with unknown birth, never dead', () => {
+  // The funding deposits predate the scanned range (or the scan missed
+  // them). The account is plainly paying for years; that is not a death.
+  const s = fold({ payer: PAYER, account: account(1249), deposits: [] })
+  assert.equal(s.life, 'thriving')
+  assert.equal(s.generation, 1)
+  assert.equal(s.born, null)
+  assert.equal(s.memorial, null)
+  assert.deepEqual(s.generations, [])
+})
+
 test('one genesis deposit, healthy runway: alive, generation 1, born at that deposit', () => {
   const s = fold({ payer: PAYER, account: account(100), deposits: [dep(A, days(120), 50_000)] })
   assert.equal(s.life, 'thriving')

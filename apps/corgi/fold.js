@@ -217,8 +217,14 @@ export function fold(input, config = DEFAULT_CONFIG) {
   const feeders = distinctFeedersSince(rows, account.epoch - window)
   const park = parkOf(rows, config, payer)
 
+  // History outranks the instant: a recorded death stands until a deposit
+  // lifts runway back over the line. With no recorded birth at all (the
+  // funding deposits predate the scanned range) the runway alone decides;
+  // an unseen history is unknown, not a death.
+  const everBorn = alive || generations.length > 0
   let life = lifeOf(runway, config)
-  if (life !== 'unfunded' && !alive) life = 'dead'
+  if (life !== 'unfunded' && everBorn && !alive) life = 'dead'
+  const living = life !== 'dead' && life !== 'unfunded'
 
   const memorial = life === 'dead'
     ? {
@@ -247,7 +253,7 @@ export function fold(input, config = DEFAULT_CONFIG) {
     life,
     mood: moodOf(feeders.size),
     distinctFeeders: feeders.size,
-    generation: generations.length + (alive ? 1 : 0),
+    generation: generations.length + (living ? 1 : 0),
     born,
     generations,
     memorial,
