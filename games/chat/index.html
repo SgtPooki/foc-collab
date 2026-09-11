@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>chat on a piece log</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --accent: #2f6fed; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: start center; min-height: 100vh; }
+  main { padding: 1rem; max-width: 40rem; width: 100%; box-sizing: border-box; }
+  h1 { font-size: 1.1rem; font-weight: 600; text-align: center; }
+  a { color: var(--accent); }
+  .meta { font-size: 0.8rem; opacity: 0.7; }
+  button, input, textarea { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; padding: 0.35rem 0.6rem; }
+  button { cursor: pointer; }
+  #rooms { display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.85rem; margin: 0.5rem 0; }
+  #rooms a.current { font-weight: 700; text-decoration: none; }
+  #messages { display: flex; flex-direction: column; gap: 0.4rem; margin: 1rem 0; min-height: 8rem; }
+  .msg { padding: 0.45rem 0.7rem; border: 1px solid var(--line); border-radius: 10px; max-width: 85%; align-self: flex-start; }
+  .msg.mine { align-self: flex-end; border-color: var(--accent); }
+  .msg .who { font-size: 0.75rem; opacity: 0.7; margin-bottom: 0.15rem; }
+  .msg .who .guest { opacity: 0.8; }
+  #compose { display: grid; grid-template-columns: 8rem 1fr auto; gap: 0.5rem; align-items: start; }
+  #text { resize: vertical; min-height: 2.4rem; }
+  #status { min-height: 1.5em; text-align: center; }
+  #status.error, #wallet-status.error { color: #e5534b; }
+  #status.busy::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.5s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+  .row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.8rem 0; flex-wrap: wrap; }
+  #banner { background: #e5534b22; border: 1px solid #e5534b66; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>chat, event-sourced: <span id="room-title"></span></h1>
+  <p class="meta" id="intro">Every message is a signed JSON piece. A player posts into the data set their
+  wallet pays for; a guest posts into the arcade's data set, which a contract lets anyone write to a little at a time.
+  Everyone reads every data set straight from Filecoin Onchain Cloud. There is no server.</p>
+  <p class="meta" id="transport-label"></p>
+  <div class="row" id="wallet-row" hidden>
+    <button id="connect">connect wallet to post from your own data set</button>
+    <span class="meta" id="wallet-status"></span>
+  </div>
+  <p id="banner" hidden></p>
+  <p class="meta"><a href="../">← arcade</a></p>
+  <div id="rooms"></div>
+  <div id="messages"></div>
+  <div id="compose">
+    <input id="name" placeholder="name (optional)" maxlength="24" />
+    <textarea id="text" placeholder="say something (280 max, about a minute to settle)" maxlength="280"></textarea>
+    <button id="send">post</button>
+  </div>
+  <p id="status"></p>
+  <p class="meta" id="meta"></p>
+</main>
+
+<script type="module">
+import { displayOrder, foldRoom, rooms } from './fold.js'
+import { mountRoom } from '../lib/room-byow.js'
+
+const short = (t) => t.slice(0, 6)
+const who = (m) => {
+  const name = m.name ?? `guest ${short(m.token)}`
+  const where = `#${m.src}`
+  return `${name} · ${where}`
+}
+
+await mountRoom({
+  app: 'foc-chat',
+  storagePrefix: 'chat',
+  intro: 'Every message is a signed JSON piece on Filecoin Onchain Cloud. Players post into the data set '
+    + 'their wallet pays for; guests post into the arcade\'s data set, which a contract (the arcade authorizer) '
+    + 'lets anyone write to a little at a time, no wallet needed. Every reader folds every data set with the same '
+    + 'rules. A post takes about a minute to settle; yours shows at once.',
+  fold: foldRoom,
+  order: displayOrder,
+  rooms,
+  compose: (state, text, name) => ({ type: 'post', room: state.room, text, ...(name ? { name } : {}) }),
+  render({ ordered, mine }) {
+    return ordered.map((m) => {
+      const div = document.createElement('div')
+      div.className = `msg${mine(m) ? ' mine' : ''}`
+      const w = document.createElement('div')
+      w.className = 'who'
+      w.textContent = who(m)
+      const t = document.createElement('div')
+      t.textContent = m.text
+      div.append(w, t)
+      return div
+    })
+  },
+})
+</script>
+</body>
+</html>

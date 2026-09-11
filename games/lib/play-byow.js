@@ -20,10 +20,9 @@
  * to their own data set, opponents found through chain events) and the v1
  * single shared log used by the local demo and the publisher-key build.
  */
+import { bootByowPage } from './boot-byow.js'
 import { tagsFor } from './discover.js'
 import { loadIdentity, signPiece, verifyAll } from './identity.js'
-import { createTransport } from './transport.js'
-import { hasWallet, provisionPlayer } from './wallet-byow.js'
 
 const PENDING_TIMEOUT_MS = 3 * 60000 // give up on a submitted move or create after 3 minutes
 
@@ -49,39 +48,10 @@ export async function mountGame(spec) {
   // Fold status lines name seats X and O; the page shows the game's own names.
   const pretty = (line) => String(line).replace(/\bX\b/g, seatNames.X).replace(/\bO\b/g, seatNames.O)
 
-  const $ = (id) => document.getElementById(id)
-  const labelEl = $('transport-label')
-  labelEl.textContent = 'connecting to shared storage…'
-  let transport
-  try {
-    transport = await createTransport()
-  } catch (err) {
-    console.error(err)
-    labelEl.textContent = `could not connect (${err?.message?.slice(0, 120) ?? err}) — reload to retry`
-    throw err
-  }
-
-  // Seat identity is a keypair generated in this browser: every appended
-  // piece is signed, so log readers cannot alter a player's pieces. The
-  // private key is a non-extractable CryptoKey in IndexedDB. On shared
-  // storage one identity serves the whole browser; the local demo scopes
-  // identities by a per-tab id so two tabs in one browser can face each
-  // other (and keep their seats across reloads).
-  function tabScope() {
-    const key = `${spec.storagePrefix}-tab-id`
-    let id = sessionStorage.getItem(key)
-    if (id == null) {
-      id = crypto.randomUUID()
-      sessionStorage.setItem(key, id)
-    }
-    return id
-  }
-  const identity = await loadIdentity(transport.perTab ? tabScope() : 'shared')
-  const token = identity.token
+  const { $, labelEl, transport, identity, token, byow } = await bootByowPage({ storagePrefix: spec.storagePrefix, spectatorNote: 'you can still watch games' })
   // The computer's own signing identity, so its moves are distinguishable
   // from the player's inside one data set (see byow-engine.js, solo games).
-  const bot = spec.cpu != null && typeof transport.addDataSet === 'function' ? await loadIdentity('cpu') : null
-  labelEl.textContent = transport.label
+  const bot = spec.cpu != null && byow ? await loadIdentity('cpu') : null
 
   const params = new URLSearchParams(location.search)
   const gameId = params.get('game')
@@ -90,7 +60,6 @@ export async function mountGame(spec) {
   // (game id, root data set) and the invite link carries both. The fold
   // follows the seat-owner sequencing rules in byow-engine.js. Otherwise
   // the page is the v1 single-shared-log game.
-  const byow = typeof transport.addDataSet === 'function'
   const V = byow ? 2 : 1
   const root = byow ? (params.get('x') ?? transport.me?.ds ?? null) : null
   const fromBlock = params.get('from') // block the game was created at: where discovery starts
@@ -142,49 +111,6 @@ export async function mountGame(spec) {
       pendingCreate = null
       sessionStorage.removeItem(PENDING_CREATE_KEY)
       lastError = 'your game has not appeared on-chain yet — keep this page open, it will show once the piece settles'
-    }
-  }
-
-  if (transport.writeExpiry) {
-    const banner = $('banner')
-    if (transport.writeExpiry < Date.now()) {
-      banner.textContent = byow
-        ? 'your session key has expired — reconnect your wallet to play'
-        : 'the demo write key has expired — games are read-only until the publisher re-arms it'
-      banner.hidden = false
-    } else if (transport.writeExpiry < Date.now() + 3 * 3600000) {
-      banner.textContent = `heads up: your write key expires ${new Date(transport.writeExpiry).toLocaleString()}`
-      banner.hidden = false
-    }
-  }
-
-  // BYOW onboarding: with no descriptor (or an expired one) the page is a
-  // spectator and offers to make one from the connected wallet. Every stage
-  // is shown; every failure names its step. Success reloads into play mode.
-  const needsWallet = byow && (transport.me == null || (transport.writeExpiry && transport.writeExpiry < Date.now()))
-  if (needsWallet) {
-    $('wallet-row').hidden = false
-    const walletStatus = $('wallet-status')
-    const connect = $('connect')
-    if (!hasWallet()) {
-      connect.disabled = true
-      walletStatus.textContent = 'no browser wallet found — install MetaMask (or any EIP-1193 wallet) on Filecoin calibration to play; you can still watch games'
-    }
-    connect.onclick = async () => {
-      connect.disabled = true
-      walletStatus.classList.remove('error')
-      try {
-        // Never clear what is saved first: provisionPlayer resumes from it and
-        // only pays for the steps the chain does not already show done.
-        const me = await provisionPlayer({ onProgress: (stage) => { walletStatus.textContent = `${stage}…` } })
-        walletStatus.textContent = `ready: your data set #${me.ds}, reloading`
-        location.reload()
-      } catch (err) {
-        console.error(err)
-        walletStatus.textContent = `could not set up (${err?.message ?? err}) — fix and try again`
-        walletStatus.classList.add('error')
-        connect.disabled = false
-      }
     }
   }
 

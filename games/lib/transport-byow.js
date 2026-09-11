@@ -405,7 +405,26 @@ export async function createByowTransport(config = {}) {
       await writer.append(piece, onProgress, tags)
     },
     /** The sponsored data set this page may write to as a guest, or null. */
-    sponsored: sponsored == null ? null : { ds: String(sponsored.ds), payer: sponsored.payer, log: homeLog(sponsored.ds) },
+    sponsored: sponsored == null ? null : { ds: String(sponsored.ds), payer: sponsored.payer, authorizer: sponsored.authorizer ?? null, log: homeLog(sponsored.ds) },
+    /**
+     * What the authorizer will say to this browser's guest right now:
+     * { canWrite, waitEpochs, budgetLeft, head }. Needs sponsored.authorizer.
+     */
+    async guestStatus() {
+      if (sponsored?.authorizer == null) return null
+      const w = await sponsor()
+      const abi = [
+        { type: 'function', name: 'nextWriteEpoch', stateMutability: 'view', inputs: [{ type: 'uint256' }, { type: 'address' }], outputs: [{ type: 'uint256' }] },
+        { type: 'function', name: 'budgetLeft', stateMutability: 'view', inputs: [{ type: 'uint256' }], outputs: [{ type: 'uint256' }] },
+      ]
+      const [head, next, budgetLeft] = await Promise.all([
+        client.getBlockNumber(),
+        client.readContract({ address: sponsored.authorizer, abi, functionName: 'nextWriteEpoch', args: [BigInt(sponsored.ds), w.guest] }),
+        client.readContract({ address: sponsored.authorizer, abi, functionName: 'budgetLeft', args: [BigInt(sponsored.ds)] }),
+      ])
+      const waitEpochs = next > head ? Number(next - head) : 0
+      return { canWrite: waitEpochs === 0 && budgetLeft > 0n, waitEpochs, budgetLeft: Number(budgetLeft), head: Number(head) }
+    },
     /** Append to the sponsored data set through its authorizer (a guest key minted in this browser). */
     async appendSponsored(piece, onProgress, tags) {
       const w = await sponsor()
