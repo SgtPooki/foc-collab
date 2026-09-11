@@ -113,6 +113,28 @@ Consequences:
   filecoin-pin tooling support, and the payer still funds all writes, so
   spend caps belong in the authorizer.
 
+- **Update 2026-09-11: proven on calibration.** `scripts/spike-authorizer.mjs`
+  deployed `contracts/authorizer/src/CooldownAuthorizer.sol` (payer may do
+  anything; any other secp256k1 key may AddPieces, at most one piece per
+  operation and once per 20 epochs per signer) at
+  `0x3b129f01bd364c2306445b55b005aad3295d1aa1`, created data set 35407, and
+  attached it with `FilecoinWarmStorageService.setDataSetAuthorizer` (live in
+  the calibnet v1.4.0 deployment at `0x02925630df557F957f70E112bA06e50965417CA0`).
+  A key generated seconds earlier, never registered anywhere, then wrote a
+  piece through the unmodified SDK: PieceAdded on-chain 3 seconds after the
+  provider stored it. The same key's second write inside the cooldown was
+  refused by the chain. What the SDK still lacks, as of `@filoz/synapse-core`
+  0.8.1: `setDataSetAuthorizer` is not in its FWSS ABI (the spike hand-rolls
+  the call); a session-key account only signs if its local `expirations`
+  say it may, so a page using an authorizer passes a far-future expiry
+  instead of reading the registry; and the refusal surfaces as an
+  undecodable revert from the provider's `addPieces` simulation rather than
+  a named error. Metadata- or size-based rules need the authorizer to decode
+  `operationData` itself; the Cid struct carries only the CommP bytes, so a
+  byte-size cap would parse the multihash. Unlocked by this: sponsored
+  writes (no wallet in the browser at all), per-epoch move cooldowns as
+  contract law, and a shared team data set for crowd moves (issue #6).
+
 ## Test plan (in order, all artifacts in this repo)
 
 1. `npm test` — fold correctness. **Done, green.**
