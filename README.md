@@ -18,18 +18,28 @@ Origin: [Notion, viewer saves for published artifacts](https://app.notion.com/p/
   games. Each has a pure v1 fold (`fold.js`, seats by signing token, one
   shared log), a thin v2 rules module (`fold-byow.js`), a computer opponent
   (`cpu.js`), and a page that is markup plus one `mountGame` call.
-- `games/lib/`: everything the games share. `byow-engine.js` is the v2
+- `games/chat/`, `games/paint/`, `games/jukebox/`: many-writer apps.
+  Chat rooms (a lobby and one per game) where anyone may post, a 64 by 64
+  paint canvas, and a coin-operated jukebox. Guests write through the
+  arcade's sponsored data sets and their authorizer contracts, no wallet
+  needed; a jukebox coin is a USDFC deposit from a wallet.
+- `games/lib/`: everything the apps share. `byow-engine.js` is the v2
   fold engine (seat-owner sequencing across per-player data sets),
-  `play-byow.js` the page shell, `identity.js` P-256 signing,
-  `wallet-byow.js` in-page wallet onboarding, `discover.js` chain-event
-  discovery, `transport-byow.js` keyless reads and session-key writes.
+  `boot-byow.js`, `play-byow.js`, `room-byow.js`, and `dashboard-byow.js`
+  the page shells, `identity.js` P-256 signing, `wallet-sig.js` wallet
+  signatures over pieces, `wallet-byow.js` in-page wallet onboarding,
+  `coins.js` Filecoin Pay deposits, `discover.js` chain-event discovery,
+  `transport-byow.js` keyless reads, session-key writes, and sponsored
+  guest writes.
 - `apps/corgi/`: the FOC corgi. Its life is the runway of a Filecoin Pay
   payer account; feeding is depositing straight into that account from
   your wallet (no data set, no session key); a deposit at or above the
   page's adoption threshold (1 USDFC in `config.calibration.json`) adopts
   a corgi into the park.
-- `contracts/authorizer/`: `CooldownAuthorizer.sol`, a per-data-set write
-  ACL proven on calibration (see `docs/FEASIBILITY.md`).
+- `contracts/authorizer/`: `ArcadeAuthorizer.sol`, the per-data-set write
+  policy the sponsored data sets run (cooldown, budget, size cap,
+  blocklist, pause), and the minimal `CooldownAuthorizer.sol` spike.
+  Addresses in `site/arcade.json`.
 - `site/` and `scripts/build-site.mjs`: the landing page and every app as
   a self-contained page.
 - `docs/`: `FEASIBILITY.md` (architecture, security model, what is proven),
@@ -52,7 +62,13 @@ page carries no key of anyone's.
 One data set per wallet serves every game on the site. "Play the
 computer" runs a solo game inside that same data set: the computer is a
 second signing identity in your browser and its moves cost only their
-pieces.
+pieces. The landing page boots the same transport and lists your games
+across every app, the ones waiting on you first.
+
+Visitors without a wallet still write: chat posts, paint pixels, and
+jukebox picks go into data sets the arcade wallet pays for, through
+authorizer contracts that enforce a cooldown, a daily budget, and a
+size cap per guest key minted in the browser.
 
 A move settles in about a minute (issue #7 tracks measuring that).
 

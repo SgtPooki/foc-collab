@@ -44,14 +44,18 @@ the only order the fold trusts is piece id inside one data set.
   self-contained BYOW page + the corgi (`site/`); `.github/workflows/pages.yml`
   deploys it to GitHub Pages on push to main
 - `npm run test:e2e:corgi`: the corgi's acceptance test against calibration
+- `E2E_WALLET_KEY=$PLAYER_C_PRIVATE_KEY E2E_URL=http://localhost:4173/ npm run test:e2e:jukebox`:
+  a wallet inserts a coin and a wallet-signed pick joins the queue, from a
+  built jukebox page (`node scripts/build-page.mjs <dir> site/jukebox.config.json --game jukebox`)
 - Authorizer (per data set write ACL, `contracts/authorizer`): `forge build`
   there, then `node scripts/spike-authorizer.mjs` deploys `CooldownAuthorizer`,
   attaches it to a scratch data set with `setDataSetAuthorizer`, and writes
   through it with a key that holds no session key (~10 min; proven
   2026-09-11, see `docs/FEASIBILITY.md`)
 - The arcade (sponsored writes): `site/arcade.json` records the arcade
-  wallet, its data set (35446), the `ArcadeAuthorizer` address, and the
-  policy; `PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY node scripts/sponsor-setup.mjs`
+  wallet, its data sets (35446 arcade/chat, 35455 paint, 35458 jukebox),
+  each `ArcadeAuthorizer` address (one instance per policy), and the
+  policies; `PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY node scripts/sponsor-setup.mjs`
   is the owner-side setup (reuse with `AUTHORIZER_ADDRESS` and
   `ARCADE_DATA_SET` set). Site configs carry `sponsored: { ds, payer }`;
   pages write to it with `transport.appendSponsored()` as a guest key
@@ -73,10 +77,31 @@ the only order the fold trusts is piece id inside one data set.
   with `cpu` is a solo game: both seats in the root data set, told apart
   by token. `games/<game>/fold-byow.js` is the thin per-game rules module.
   Design: `research/2026-09-10-byow-proof-plan.md`
-- `games/lib/play-byow.js`: the shared page shell (`mountGame(spec)`):
-  transport and identity, wallet onboarding, lobby, discovery, pending
-  move and pending create, the computer opponent, notifications, status.
-  A game's `index.html` is markup plus a `mountGame` call.
+- `games/lib/boot-byow.js`: what every page does first (transport,
+  identity, expiry banner, wallet onboarding); `play-byow.js`,
+  `room-byow.js`, and `dashboard-byow.js` start here
+- `games/lib/play-byow.js`: the two-seat game shell (`mountGame(spec)`):
+  lobby, discovery, pending move and pending create, the computer
+  opponent, notifications, status. A game's `index.html` is markup plus
+  a `mountGame` call.
+- `games/lib/room-byow.js`: the many-writer room shell (`mountRoom`):
+  discovery of every data set that posted, posting as a wallet player
+  (own data set) or as a guest (the arcade's sponsored data set).
+  `games/chat` is built on it.
+- `games/lib/dashboard-byow.js`: the landing page's cross-app view of the
+  player's games, waiting-on-you first (`site/index.html` imports it and
+  each game's folds from the built game directories)
+- `games/lib/coins.js`: Filecoin Pay deposits as coins: read
+  `DepositRecorded` for a payer (chunked, checkpointed) and insert one
+  from a wallet (approve, deposit). Used by the jukebox; the corgi has
+  its own copy in `apps/corgi/chain.js`
+- `games/lib/wallet-sig.js`: a wallet's EIP-191 signature over a piece
+  body (`signWithWallet`, `annotateWalletSigs`), verified before the fold
+  like piece signatures; how a pick proves which wallet paid
+- `games/chat/`, `games/paint/`, `games/jukebox/`: the many-writer apps.
+  Chat posts from wallet players' data sets or the arcade's; paint and
+  the jukebox each live in one sponsored data set (35455, 35458) so
+  piece id is a total order. Each has a pure `fold.js` with tests.
 - `games/<game>/cpu.js`: `pickMove(state)`, the computer's move picker
   (minimax for tic-tac-toe, depth-4 negamax for connect-four). The seam a
   learned picker replaces (issue #2).
