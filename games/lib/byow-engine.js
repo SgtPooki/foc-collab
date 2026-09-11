@@ -42,8 +42,14 @@
  *   pieceId  the chain-assigned id inside that data set (bigint-able)
  *   ref      sha256 of the canonical signed body (see identity.js)
  *
+ * Solo games: a `create` piece may carry `cpu`, the token of a second
+ * identity in the same browser that plays O. Both seats then live in the
+ * root data set, where piece id is a total order, and the fold tells the
+ * two writers apart by token. No join, no ratification, no second data
+ * set: a solo game costs only its own pieces.
+ *
  * Piece shapes:
- *   { v: 2, app, log, type: 'create', game, token, name? }
+ *   { v: 2, app, log, type: 'create', game, token, name?, cpu? }
  *   { v: 2, app, log, type: 'join',   game, token, prev }
  *   { v: 2, app, log, type: 'move',   game, token, seq, prev, cell, o? }
  *     o = { token, ds } only on seq 0 (the ratification)
@@ -65,6 +71,7 @@ export function initialByowState(game, root, rules) {
     homes: { X: String(root), O: null }, // data set ids
     joins: [], // candidate joiners before ratification: { token, ds, ref }
     hints: [], // data sets named by X's ratification pieces; a root-only reader must fetch them
+    solo: false, // O is a bot identity in the creator's browser, writing to the same data set
     ratified: false,
     lastRef: null,
   }
@@ -142,6 +149,17 @@ export function foldByow(game, root, pieces, rules) {
     applied: 1,
   }
 
+  if (soloOpponent(create) != null) {
+    state = {
+      ...state,
+      seats: { X: create.token, O: create.cpu },
+      homes: { X: rootId, O: rootId },
+      solo: true,
+      ratified: true,
+    }
+    return finish(playMoves(state, all, rules))
+  }
+
   const joins = all
     .filter((p) => p.type === 'join' && p.prev === create.ref && p.src !== rootId)
     .map((p) => ({ token: p.token, ds: p.src, ref: p.ref }))
@@ -167,16 +185,32 @@ export function foldByow(game, root, pieces, rules) {
     break
   }
   if (!state.ratified) return finish(state)
+  return finish(playMoves(state, all, rules))
+}
 
+/** The bot token of a solo create piece, or null. It must differ from the creator's. */
+function soloOpponent(create) {
+  if (typeof create.cpu !== 'string' || create.cpu === '' || create.cpu === create.token) return null
+  return create.cpu
+}
+
+/**
+ * Applies moves in turn order from the ratified position. A move counts
+ * only from the seat's home data set; when both seats share one data set
+ * (solo games) the signing token tells them apart as well.
+ */
+function playMoves(state, all, rules) {
+  const shared = state.homes.X === state.homes.O
   for (;;) {
     if (state.winner != null) break
     const seat = state.next
     const move = all.find((p) => p.type === 'move' && p.src === state.homes[seat]
+      && (!shared || p.token === state.seats[seat])
       && p.seq === state.seq && p.prev === state.lastRef && rules.legal(state, p))
     if (move == null) break
     state = placeMove(state, seat, move, rules)
   }
-  return finish(state)
+  return state
 }
 
 /** Every game whose create piece is in one of the listed data sets, creation order per data set. */

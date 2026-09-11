@@ -8,7 +8,13 @@
  * The page's markup must provide these ids: transport-label, intro,
  * wallet-row, connect, wallet-status, banner, lobby, create, games,
  * lobby-empty, game, share, join, link-back, rematch, notify, board,
- * status, log-info, byow-meta.
+ * status, log-info, byow-meta; and create-cpu when the spec has a cpu.
+ *
+ * Solo play (BYOW only): with `spec.cpu`, "play the computer" creates a
+ * game whose O seat is a second identity in this browser. The computer's
+ * moves are picked by spec.cpu.pickMove(state), signed by that identity,
+ * and appended to the player's own data set through the same session key,
+ * so a solo game costs only its pieces and needs no second wallet.
  *
  * Two modes, chosen by the transport: BYOW (schema v2, each player writes
  * to their own data set, opponents found through chain events) and the v1
@@ -35,6 +41,7 @@ const PENDING_TIMEOUT_MS = 3 * 60000 // give up on a submitted move or create af
  *   landed(board, m) what the board holds where pending move m would land
  *   renderBoard(ctx) DOM nodes for the board; ctx = { state, seat, playable, ratifying, canMove,
  *                  pendingMove, prevBoard, place(move, label) } where place() appends the move
+ *   cpu?           { pickMove(state) -> move in the same shape place() takes, or null }
  */
 export async function mountGame(spec) {
   const { app: APP, seatNames, status } = spec
@@ -71,6 +78,9 @@ export async function mountGame(spec) {
   }
   const identity = await loadIdentity(transport.perTab ? tabScope() : 'shared')
   const token = identity.token
+  // The computer's own signing identity, so its moves are distinguishable
+  // from the player's inside one data set (see byow-engine.js, solo games).
+  const bot = spec.cpu != null && typeof transport.addDataSet === 'function' ? await loadIdentity('cpu') : null
   labelEl.textContent = transport.label
 
   const params = new URLSearchParams(location.search)
@@ -183,6 +193,11 @@ export async function mountGame(spec) {
     const create = $('create')
     create.disabled = busy != null
     create.textContent = busy ?? 'create a game'
+    const createCpu = $('create-cpu')
+    if (createCpu != null) {
+      createCpu.hidden = bot == null
+      createCpu.disabled = busy != null || transport.me == null
+    }
     const games = foldLobby(pieces)
     $('lobby-empty').hidden = games.length > 0
     const joined = (g) => mySeat(g) != null || joinedByMe(g)
@@ -247,6 +262,7 @@ export async function mountGame(spec) {
       ratifying ? `${label}, seating data set #${state.joins[0].ds} as ${seatNames.O}` : label,
       { ...move, seat, sentAt: Date.now() },
     )
+    maybePlayComputer(state, seat)
     $('board').replaceChildren(...spec.renderBoard({ state, seat, playable, ratifying, canMove, pendingMove, prevBoard, place }))
     const yourTurn = canMove
     document.title = yourTurn ? `● your move — ${spec.name}` : `${spec.name} on a piece log`
@@ -289,7 +305,8 @@ export async function mountGame(spec) {
     const problems = transport.problems()
     const disputes = transport.disputes()
     const lines = [`folded from data set${sets.length === 1 ? '' : 's'} ${sets.map((d) => `#${d}`).join(', ')}`]
-    if (state.homes.O != null) lines.push(`${seatNames.X} writes to #${state.homes.X}, ${seatNames.O} writes to #${state.homes.O}`)
+    if (state.solo) lines.push(`solo game: the computer plays ${seatNames.O} from this browser into the same data set`)
+    else if (state.homes.O != null) lines.push(`${seatNames.X} writes to #${state.homes.X}, ${seatNames.O} writes to #${state.homes.O}`)
     if (fromBlock == null) lines.push('invite has no start block: opponent discovery falls back to the link-back button')
     if (discovery.failed.length > 0) lines.push(`chain scan skipped ${discovery.failed.length} block range(s) (${discovery.failed[0].error})`)
     if (problems.length > 0) lines.push(`cannot read ${problems.map((p) => `#${p.ds} (${p.error})`).join('; ')} — showing last known pieces`)
@@ -304,8 +321,9 @@ export async function mountGame(spec) {
     if (busy != null) return `${busy}`
     if (pendingMove != null) {
       const eta = Math.max(0, 60 - Math.round((Date.now() - pendingMove.sentAt) / 1000))
-      if (eta > 0) return `move sent — your opponent sees it in ~${eta}s`
-      return 'move sent — finalizing on-chain'
+      const who = pendingMove.seat === seat ? 'move sent' : 'the computer moved'
+      if (eta > 0) return `${who} — it settles on-chain in ~${eta}s`
+      return `${who} — finalizing on-chain`
     }
     if (lastError != null) return lastError
     if (pendingCreate != null && state.seats.X == null) {
@@ -316,7 +334,7 @@ export async function mountGame(spec) {
     if (ratifying) return `${state.joins.length} joined — your first move seats the first joiner as O`
     if (iJoined && !state.ratified) return 'you joined — X seats you with their first move'
     if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
-      return `${status(state)} — you are ${seat}, waiting for your opponent`
+      return `${status(state)} — you are ${seat}, ${state.solo ? 'the computer is thinking' : 'waiting for your opponent'}`
     }
     if (seat != null) return `${status(state)} — you are ${seat}`
     if (joinable) return `${status(state)} — join to play`
@@ -392,7 +410,18 @@ export async function mountGame(spec) {
     render()
   }
 
-  async function append(payload, label, move = null) {
+  // Solo games: when it is the computer's turn and nothing is in flight,
+  // pick its move and append it signed by the bot identity. append() sets
+  // busy before anything awaits, so a re-entrant render cannot double-play.
+  function maybePlayComputer(state, seat) {
+    if (bot == null || !state.solo || seat !== 'X' || state.next !== 'O' || state.winner != null) return
+    if (busy != null || pendingMove != null || state.seats.O !== bot.token) return
+    const move = spec.cpu.pickMove(state)
+    if (move == null) return
+    append(movePayload(state, spec.moveFields(move), false), 'the computer is moving', { ...move, seat: 'O', sentAt: Date.now() }, bot)
+  }
+
+  async function append(payload, label, move = null, signer = identity) {
     if (busy != null) return false // one in-flight append at a time
     busy = label
     busyStage = null
@@ -400,7 +429,7 @@ export async function mountGame(spec) {
     lastError = null
     render()
     try {
-      const signed = await signPiece({ ...payload, app: APP, log: transport.logId }, identity)
+      const signed = await signPiece({ ...payload, app: APP, log: transport.logId }, signer)
       const tags = byow ? tagsFor(APP, payload.game, payload.type) : undefined
       await transport.append(signed, (stage) => {
         busyStage = stage
@@ -422,12 +451,13 @@ export async function mountGame(spec) {
     }
   }
 
-  async function newGame(name) {
+  async function newGame(name, { cpu = false } = {}) {
     const game = `game-${crypto.randomUUID()}`
     // The invite carries the block the game was created after, so joiners'
     // clients and the creator's own scan start there and never earlier.
     const from = byow ? String(await transport.blockNumber()) : null
-    const ok = await append({ v: V, type: 'create', game, name }, 'creating game')
+    const solo = cpu && bot != null ? { cpu: bot.token } : {}
+    const ok = await append({ v: V, type: 'create', game, name, ...solo }, 'creating game')
     if (!ok) return
     sessionStorage.setItem(PENDING_CREATE_KEY, JSON.stringify({ game, sentAt: Date.now() }))
     if (!byow) {
@@ -441,6 +471,7 @@ export async function mountGame(spec) {
     const name = prompt('Name the game (optional):')?.trim() || undefined
     newGame(name)
   }
+  if ($('create-cpu') != null) $('create-cpu').onclick = () => newGame('vs the computer', { cpu: true })
 
   $('join').onclick = async () => {
     const state = foldGame(pieces)
@@ -468,7 +499,10 @@ export async function mountGame(spec) {
   }, `copy link for ${seatNames.X}`)
   copyButton('share', () => location.href, 'copy invite link')
 
-  $('rematch').onclick = () => newGame('rematch')
+  $('rematch').onclick = () => {
+    const state = foldGame(pieces)
+    newGame('rematch', { cpu: state.solo })
+  }
 
   $('notify').onclick = async () => {
     await Notification.requestPermission()

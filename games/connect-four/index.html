@@ -64,7 +64,7 @@
   <p id="banner" hidden></p>
 
   <section id="lobby" hidden>
-    <div class="row"><button id="create">create a game</button></div>
+    <div class="row"><button id="create">create a game</button><button id="create-cpu" hidden>play the computer</button></div>
     <div id="games"></div>
     <p class="meta" id="lobby-empty" hidden>No games yet — create the first one.</p>
     <p class="meta">Your seat lives in this browser (same seat in every tab).
@@ -93,6 +93,7 @@
 import { fold, lobby, seatOf, status, COLS, ROWS, landingRow } from './fold.js'
 import { dataSetsOf, foldByow, lobbyByow, seatOfHome } from './fold-byow.js'
 import { mountGame } from '../lib/play-byow.js'
+import { pickMove } from './cpu.js'
 
 const idx = (col, row) => col * ROWS + row
 const SEAT_NAME = { X: 'Red', O: 'Yellow' }
@@ -110,6 +111,7 @@ await mountGame({
   status,
   v1: { fold, lobby, seatOf },
   v2: { foldByow, lobbyByow, seatOfHome, dataSetsOf },
+  cpu: { pickMove },
   moveFields: (m) => ({ col: m.col }),
   landed: (board, m) => board[idx(m.col, m.row)],
   renderBoard({ state, seat, canMove, pendingMove, prevBoard, place }) {

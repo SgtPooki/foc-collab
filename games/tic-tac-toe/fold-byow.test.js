@@ -97,6 +97,47 @@ test('a seat belongs to its home data set: a new signing token in the same data 
   assert.equal(foldBoth([c, selfJoin]).joins.length, 0)
 })
 
+test('solo game: a bot token in the create piece plays O from the same data set', () => {
+  reset()
+  const BOT = 'token-bot'
+  const c = create(DS_A, A, { cpu: BOT })
+  const m0 = move(DS_A, A, 0, 4, c.ref)
+  const m1 = move(DS_A, BOT, 1, 0, m0.ref)
+  const m2 = move(DS_A, A, 2, 8, m1.ref)
+  const s = foldBoth([c, m0, m1, m2])
+  assert.equal(s.solo, true)
+  assert.equal(s.ratified, true)
+  assert.deepEqual(s.homes, { X: DS_A, O: DS_A })
+  assert.deepEqual(s.seats, { X: A, O: BOT })
+  assert.equal(seatOfHome(s, DS_A), 'X')
+  assert.deepEqual([s.board[4], s.board[0], s.board[8]], ['X', 'O', 'X'])
+  assert.equal(s.next, 'O')
+  assert.equal(s.ignored, 0)
+  assert.deepEqual(dataSetsOf(s), [DS_A])
+})
+
+test('solo game: the wrong token in the root cannot move for a seat, and joins are ignored', () => {
+  reset()
+  const BOT = 'token-bot'
+  const c = create(DS_A, A, { cpu: BOT })
+  const m0 = move(DS_A, A, 0, 4, c.ref)
+  const impostor = move(DS_A, A, 1, 0, m0.ref, {}, 'm:impostor') // X trying to play O's turn
+  const j = join(DS_B, B, c.ref)
+  const s = foldBoth([c, m0, impostor, j])
+  assert.equal(s.board[0], null)
+  assert.equal(s.next, 'O')
+  assert.deepEqual(s.joins, [])
+  assert.equal(s.ignored, 2)
+})
+
+test('a create whose cpu equals its own token is a normal 1v1 game', () => {
+  reset()
+  const c = create(DS_A, A, { cpu: A })
+  const s = foldBoth([c])
+  assert.equal(s.solo, false)
+  assert.equal(s.seats.O, null)
+})
+
 test('before ratification, joiners are candidates, not O', () => {
   reset()
   const c = create()
