@@ -3,7 +3,25 @@
   "wallet": "0xB4Ef10f016fF038f6eE71AbD70067003B6E964a9",
   "dataSet": "35446",
   "authorizer": "0x60c38acea058846866b1a2a5bdae7f0e25c9b28b",
-  "policy": { "cooldownEpochs": 4, "maxPiecesPerOp": 1, "budgetPerWindow": 200, "windowEpochs": 2880 },
+  "policy": {
+    "cooldownEpochs": 4,
+    "maxPiecesPerOp": 1,
+    "budgetPerWindow": 200,
+    "windowEpochs": 2880
+  },
   "created": "2026-09-11",
-  "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY node scripts/sponsor-setup.mjs"
+  "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY node scripts/sponsor-setup.mjs",
+  "boards": {
+    "paint": {
+      "dataSet": "35455",
+      "authorizer": "0xbdc0755e3f58f60d1d179aa219716a072ec6fd44",
+      "policy": {
+        "cooldownEpochs": 4,
+        "maxPiecesPerOp": 1,
+        "budgetPerWindow": 1000,
+        "windowEpochs": 2880
+      },
+      "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY SPONSOR_SOURCE=foc-collab-paint SPONSOR_BUDGET=1000 node scripts/sponsor-setup.mjs"
+    }
+  }
 }

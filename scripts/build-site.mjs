@@ -25,7 +25,7 @@ fs.writeFileSync(
   fs.readFileSync(path.join(root, 'site/index.html'), 'utf8').replace('</head>', `<script type="application/json" id="foc-config">${homeConfig}</script>\n</head>`),
 )
 fs.writeFileSync(path.join(outDir, '.nojekyll'), '')
-for (const game of ['tic-tac-toe', 'connect-four', 'chat']) {
+for (const game of ['tic-tac-toe', 'connect-four', 'chat', 'paint']) {
   execFileSync('node', [
     path.join(root, 'scripts/build-page.mjs'),
     path.join(outDir, game),

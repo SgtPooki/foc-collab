@@ -22,6 +22,8 @@
  *   SPONSOR_MAX_PIECES pieces per operation                 (default 1)
  *   SPONSOR_BUDGET     pieces per window across all guests (default 200)
  *   SPONSOR_WINDOW     window length in epochs              (default 2880, one day)
+ *   SPONSOR_SOURCE     data set metadata tag; a new tag makes a new data set
+ *                      (default foc-collab-arcade; the paint board uses foc-collab-paint)
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -97,7 +99,7 @@ const synapse = Synapse.create({
   account: owner,
   chain: calibration,
   transport: custom({ request: transport({ chain: calibration, retryCount: 0 }).request }),
-  source: 'foc-collab-arcade',
+  source: process.env.SPONSOR_SOURCE ?? 'foc-collab-arcade',
 })
 let dataSetId = ARCADE_DATA_SET
 if (!dataSetId) {

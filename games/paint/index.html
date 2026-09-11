@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>paint war on a piece log</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --accent: #2f6fed; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: start center; min-height: 100vh; }
+  main { padding: 1rem; max-width: 44rem; width: 100%; box-sizing: border-box; text-align: center; }
+  h1 { font-size: 1.1rem; font-weight: 600; }
+  a { color: var(--accent); }
+  .meta { font-size: 0.8rem; opacity: 0.7; }
+  button { padding: 0.35rem 0.7rem; border-radius: 8px; border: 1px solid var(--line); background: transparent; font: inherit; color: inherit; cursor: pointer; }
+  #board { width: min(100%, 512px); aspect-ratio: 1; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 6px; cursor: crosshair; touch-action: manipulation; }
+  #palette { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; margin: 0.6rem 0; }
+  .swatch { width: 26px; height: 26px; padding: 0; border-radius: 6px; border: 2px solid transparent; }
+  .swatch.on { border-color: var(--accent); outline: 2px solid var(--accent); }
+  #status { min-height: 1.5em; }
+  #status.error, #wallet-status.error { color: #e5534b; }
+  #status.busy::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.5s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+  #leaders { list-style: none; padding: 0; font-size: 0.85rem; opacity: 0.85; }
+  .row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.8rem 0; flex-wrap: wrap; }
+  #banner { background: #e5534b22; border: 1px solid #e5534b66; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>paint war, event-sourced</h1>
+  <p class="meta" id="intro">One 64 by 64 canvas. Every pixel is a signed piece in the arcade's paint data set on
+  Filecoin Onchain Cloud, written by a key your browser mints; a contract lets each painter place one pixel every
+  couple of minutes from a daily budget the arcade funds. Highest piece id wins a cell. No wallet, no server.
+  A pixel takes about a minute to settle; yours shows at once.</p>
+  <p class="meta" id="transport-label"></p>
+  <div class="row" id="wallet-row" hidden>
+    <button id="connect">connect wallet</button>
+    <span class="meta" id="wallet-status"></span>
+  </div>
+  <p id="banner" hidden></p>
+  <p class="meta"><a href="../">← arcade</a> · <a href="../chat/?room=paint">chat about it</a></p>
+  <div id="palette"></div>
+  <canvas id="board"></canvas>
+  <p id="status"></p>
+  <p class="meta" id="meta"></p>
+  <ul id="leaders"></ul>
+</main>
+<script type="module">
+import { mountPaint } from './app.js'
+await mountPaint()
+</script>
+</body>
+</html>
