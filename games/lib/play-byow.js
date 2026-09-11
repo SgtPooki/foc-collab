@@ -127,7 +127,12 @@ export async function mountGame(spec) {
     const games = foldLobby(pieces)
     $('lobby-empty').hidden = games.length > 0
     const joined = (g) => mySeat(g) != null || joinedByMe(g)
-    const mine = games.filter((g) => joined(g))
+    // Games waiting on this player come first: the lobby is the "several
+    // games at once" view where a minute per move stops mattering.
+    const myTurn = (g) => mySeat(g) != null && mySeat(g) === g.next && g.winner == null && g.seats.O != null
+    const mine = games.filter((g) => joined(g)).sort((a, b) => Number(myTurn(b)) - Number(myTurn(a)))
+    const waiting = mine.filter(myTurn).length
+    document.title = waiting > 0 ? `● ${waiting} waiting on you — ${spec.name}` : `${spec.name} on a piece log`
     const open = games.filter((g) => !joined(g) && g.seats.O == null)
     const rest = games.filter((g) => !joined(g) && g.seats.O != null)
     create.disabled = busy != null || (byow && transport.me == null)
