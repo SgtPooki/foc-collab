@@ -155,6 +155,30 @@ let busy = null // label of the in-flight append, e.g. 'placing your X'
 let busyStage = null // transport progress: uploading / stored / submitted
 let pendingMove = null // { cell, seat, sentAt } shown optimistically until the log confirms it
 const PENDING_TIMEOUT_MS = 3 * 60000 // give up on a submitted move after 3 minutes
+// A game created in this browser is tracked across the navigation to its
+// page: the create piece takes a while to settle on-chain, and until the
+// fold sees it the creator would otherwise look like a spectator.
+const PENDING_CREATE_KEY = 'ttt:pending-create'
+function loadPendingCreate() {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(PENDING_CREATE_KEY) ?? 'null')
+    return p?.game === gameId && Number.isFinite(p.sentAt) ? p : null
+  } catch {
+    return null
+  }
+}
+let pendingCreate = gameId == null ? null : loadPendingCreate()
+function settlePendingCreate(state) {
+  if (pendingCreate == null) return
+  if (state.seats.X != null) {
+    pendingCreate = null
+    sessionStorage.removeItem(PENDING_CREATE_KEY)
+  } else if (Date.now() - pendingCreate.sentAt > PENDING_TIMEOUT_MS) {
+    pendingCreate = null
+    sessionStorage.removeItem(PENDING_CREATE_KEY)
+    lastError = 'your game has not appeared on-chain yet — keep this page open, it will show once the piece settles'
+  }
+}
 let lastError = null
 let prevBoard = null // to highlight the opponent's latest move
 let lastNotifiedSeq = -1
@@ -252,7 +276,7 @@ function renderGame() {
   const state = foldGame(pieces)
   const seat = mySeat(state)
   const iJoined = joinedByMe(state)
-  const joinable = seat == null && state.seats.X != null && state.seats.O == null && !iJoined
+  const joinable = seat == null && pendingCreate == null && state.seats.X != null && state.seats.O == null && !iJoined
     && (!byow || transport.me != null)
   const join = $('join')
   join.hidden = !joinable
@@ -341,6 +365,11 @@ function statusLine(state, seat, joinable, ratifying = false, iJoined = false) {
     return 'move sent — finalizing on-chain'
   }
   if (lastError != null) return lastError
+  if (pendingCreate != null && state.seats.X == null) {
+    const eta = Math.max(0, 60 - Math.round((Date.now() - pendingCreate.sentAt) / 1000))
+    if (eta > 0) return `game created — you are X once it settles on-chain, ~${eta}s`
+    return 'game created — you are X, finalizing on-chain'
+  }
   if (ratifying) return `${state.joins.length} joined — your first move seats the first joiner as O`
   if (iJoined && !state.ratified) return 'you joined — X seats you with their first move'
   if (seat != null && seat !== state.next && state.winner == null && state.seats.O != null) {
@@ -395,6 +424,7 @@ async function discoverPeers() {
 async function refresh() {
   await discoverPeers()
   pieces = await verifiedPieces(await transport.list())
+  if (gameId != null) settlePendingCreate(foldGame(pieces))
   if (gameId != null && pendingMove != null) {
     const board = foldGame(pieces).board
     const landed = board[pendingMove.cell]
@@ -455,6 +485,7 @@ async function newGame(name) {
   const from = byow ? String(await transport.blockNumber()) : null
   const ok = await append({ v: V, type: 'create', game, name }, 'creating game')
   if (!ok) return
+  sessionStorage.setItem(PENDING_CREATE_KEY, JSON.stringify({ game, sentAt: Date.now() }))
   if (!byow) {
     location.search = `?game=${encodeURIComponent(game)}`
     return
