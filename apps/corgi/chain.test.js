@@ -45,7 +45,7 @@ test('scans in chunks, returns deposits oldest first with fold-ready fields', as
   assert.equal(head, 25_000)
   assert.deepEqual(deposits.map((d) => [d.from, d.amount, d.epoch, d.logIndex]), [[A, 1n, 1500, 0], [A, 7n, 20_000, 0], [B, 5n, 20_000, 1]])
   assert.equal(typeof deposits[0].txHash, 'string')
-  assert.equal(client.calls.length, 6) // 24001 blocks in 10k chunks, two event scans
+  assert.equal(client.calls.length, 26) // 24001 blocks in 2k chunks (under Glif's 2880 cap), two event scans
   assert.equal(progress.at(-1).scanned, progress.at(-1).total)
 })
 

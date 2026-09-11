@@ -366,6 +366,11 @@ async function load({ quiet = false } = {}) {
   }
 }
 
+$('rescan').onclick = () => {
+  chain.clearLogCache(window.localStorage, { chain: net, payer: config.payer, fromBlock: config.fromBlock })
+  load()
+}
+
 // ---------------------------------------------------------------- feeding
 
 function feedStatus(text, cls = '') {

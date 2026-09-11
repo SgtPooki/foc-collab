@@ -98,6 +98,7 @@ form.feed { display: grid; gap: 12px; }
 button, input[type=text] { font: inherit; border-radius: 10px; border: 1px solid var(--line); padding: 10px 14px; background: var(--panel); color: var(--ink); }
 input[type=text] { width: 120px; font-variant-numeric: tabular-nums; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; font-weight: 400; cursor: pointer; }
 button.small { padding: 6px 12px; font-size: 14px; }
 button:disabled { opacity: .55; cursor: not-allowed; }
 #feed-status { min-height: 24px; }
@@ -219,7 +220,7 @@ footer { margin-top: 32px; font-size: 14px; color: var(--muted); }
   </section>
 
   <section class="panel">
-    <h2>Feed log <span class="muted small" id="feed-total"></span></h2>
+    <h2>Feed log <span class="muted small" id="feed-total"></span> <button type="button" class="link small" id="rescan" title="Drop the cached scan and read every deposit event again from the start block">rescan from chain</button></h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>When</th><th>What happened</th><th class="num">USDFC</th><th class="num">Life</th><th>Tx</th></tr></thead>

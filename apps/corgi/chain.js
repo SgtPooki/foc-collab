@@ -30,7 +30,13 @@ export const WITHDRAW_EVENT = sdk.parseAbiItem(
   'event WithdrawRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
 )
 
-const LOG_CHUNK = 10_000 // Glif calibration accepts 10k, rejects 50k (probed 2026-09-02)
+// Glif calibration caps eth_getLogs at 2880 blocks (probed 2026-09-11; it
+// took 10k on 2026-09-02). Stay under the cap rather than rely on the
+// error: some Glif backends answer an oversized range with an empty result
+// instead, which would read as "no deposits" and declare the corgi dead.
+const LOG_CHUNK = 2000
+const MIN_CHUNK = 250 // below this an error is the RPC's, not the range's
+const RPC_TIMEOUT_MS = 60_000 // a 2k-block getLogs on Glif regularly takes longer than viem's 10s default
 const REORG_MARGIN = 120 // rescan this many recent blocks on every load
 
 export function chainOf(name) {
@@ -40,7 +46,7 @@ export function chainOf(name) {
 }
 
 export function publicClient(chain, rpcUrl) {
-  return sdk.createPublicClient({ chain, transport: sdk.http(rpcUrl) })
+  return sdk.createPublicClient({ chain, transport: sdk.http(rpcUrl, { timeout: RPC_TIMEOUT_MS }) })
 }
 
 export function tokenOf(chain, token) {
@@ -65,8 +71,19 @@ export async function readAccount(client, { payer, token }) {
   }
 }
 
-function cacheKey(chain, payer) {
-  return `corgi:log:v2:${chain.id}:${payer.toLowerCase()}`
+// The key names everything that defines the scan, so a page built against
+// another contract or start block never resumes from this one's log.
+function cacheKey(chain, payer, fromBlock) {
+  return `corgi:log:v3:${chain.id}:${chain.contracts.filecoinPay.address.toLowerCase()}:${fromBlock}:${payer.toLowerCase()}`
+}
+
+/** Drops the cached scan so the next load reads the whole range again. */
+export function clearLogCache(storage, { chain, payer, fromBlock }) {
+  try {
+    storage?.removeItem(cacheKey(chain, payer, Number(fromBlock ?? 0)))
+  } catch {
+    // unavailable storage has nothing cached
+  }
 }
 
 function revive(entry) {
@@ -119,7 +136,7 @@ async function getLogsChunked(client, args, from, to, onProgress) {
       cursor = end + 1
       onProgress?.({ scanned: cursor - from, total: to - from + 1 })
     } catch (err) {
-      if (span <= 250) throw err
+      if (span <= MIN_CHUNK) throw err
       span = Math.floor(span / 2) // the RPC rejected the range; shrink and retry
     }
   }
@@ -138,7 +155,7 @@ function toEntry(l) {
  */
 export async function readDeposits(client, { chain, payer, token, fromBlock }, { storage, onProgress } = {}) {
   const head = Number(await client.getBlockNumber({ cacheTime: 0 }))
-  const key = cacheKey(chain, payer)
+  const key = cacheKey(chain, payer, fromBlock)
   const cached = loadCache(storage, key)
   const start = cached ? Math.max(fromBlock, cached.toBlock - REORG_MARGIN) : fromBlock
   const keepD = cached ? cached.deposits.filter((d) => d.epoch < start) : []
@@ -157,6 +174,8 @@ export async function readDeposits(client, { chain, payer, token, fromBlock }, {
 
   const deposits = sortDeposits(dedupe([...keepD, ...dLogs.map(toEntry)]))
   const withdrawals = sortDeposits(dedupe([...keepW, ...wLogs.map(toEntry)]))
+  // Only reached when every chunk of both scans succeeded: a failed chunk
+  // throws above, so a partial scan is never cached as the whole history.
   saveCache(storage, key, head, deposits, withdrawals)
   return { deposits, withdrawals, head }
 }
