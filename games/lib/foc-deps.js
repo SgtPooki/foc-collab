@@ -13,5 +13,7 @@ export { AddPiecesPermission, fromSecp256k1, getExpirations, loginSync } from '@
 export { getPDPProvider } from '@filoz/synapse-core/sp-registry'
 export { getDataSet } from '@filoz/synapse-core/warm-storage'
 export { Synapse } from '@filoz/synapse-sdk'
-export { createPublicClient, createWalletClient, custom, http, parseUnits, publicActions } from 'viem'
+export { accounts, deposit } from '@filoz/synapse-core/pay'
+export { approve, balance } from '@filoz/synapse-core/erc20'
+export { createPublicClient, createWalletClient, custom, formatUnits, http, parseAbiItem, parseEventLogs, parseUnits, publicActions, verifyMessage } from 'viem'
 export { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'

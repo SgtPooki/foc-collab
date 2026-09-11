@@ -24,6 +24,20 @@
         "maxHeight": 10
       },
       "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY SPONSOR_SOURCE=foc-collab-paint SPONSOR_BUDGET=1000 node scripts/sponsor-setup.mjs"
+    },
+    "jukebox": {
+      "dataSet": "35458",
+      "authorizer": "0x8ecb58cd1b7789394eee6257af8b3dae05ee39b8",
+      "createdBlock": 4061178,
+      "policy": {
+        "cooldownEpochs": 4,
+        "maxPiecesPerOp": 1,
+        "budgetPerWindow": 100,
+        "windowEpochs": 2880,
+        "maxHeight": 10
+      },
+      "coin": "1 USDFC deposited to the arcade wallet",
+      "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY SPONSOR_SOURCE=foc-collab-jukebox SPONSOR_BUDGET=100 node scripts/sponsor-setup.mjs"
     }
   },
   "history": [
