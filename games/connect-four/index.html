@@ -95,7 +95,7 @@ import { tagsFor } from '../lib/discover.js'
 import { dataSetsOf, foldByow, lobbyByow, seatOfHome } from './fold-byow.js'
 import { loadIdentity, signPiece, verifyAll } from '../lib/identity.js'
 import { createTransport } from '../lib/transport.js'
-import { clearDescriptor, hasWallet, provisionPlayer } from '../lib/wallet-byow.js'
+import { hasWallet, provisionPlayer } from '../lib/wallet-byow.js'
 
 const APP = 'foc-connect-four' // domain-separation tag, signed into every piece
 const idx = (col, row) => col * ROWS + row
@@ -206,7 +206,8 @@ if (needsWallet) {
     connect.disabled = true
     status.classList.remove('error')
     try {
-      await clearDescriptor()
+      // Never clear what is saved first: provisionPlayer resumes from it and
+      // only pays for the steps the chain does not already show done.
       const me = await provisionPlayer({ onProgress: (stage) => { status.textContent = `${stage}…` } })
       status.textContent = `ready: your data set #${me.ds}, reloading`
       location.reload()

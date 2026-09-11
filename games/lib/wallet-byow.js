@@ -8,21 +8,23 @@
  *   2. make sure the wallet has a Filecoin Pay deposit and has approved the
  *      storage service (one permit signature plus one transaction, only
  *      when missing)
- *   3. mint a fresh secp256k1 session key in the page and authorize it for
- *      AddPieces only, time-bound (one transaction)
- *   4. create the player's game data set, or reuse the one this app made
- *      before (one typed-data signature; the provider submits the chain
- *      transaction)
+ *   3. reuse this browser's session key for the wallet if the chain still
+ *      shows it authorized for AddPieces; otherwise mint a fresh secp256k1
+ *      key in the page and authorize it, time-bound (one transaction)
+ *   4. reuse the player's game data set (from the saved descriptor or by
+ *      this app's metadata tag), or create one (one typed-data signature;
+ *      the provider submits the chain transaction)
  *   5. keep the descriptor in IndexedDB for this browser
  *
- * The wallet signs three or four times and is never needed again until
- * the session key expires. The session key can only append pieces to
- * this wallet's data sets; it cannot move funds or delete anything.
- * Every step reports progress and every failure surfaces as an error
- * with the step it happened in.
+ * Every step that costs a signature is skipped when its result is already
+ * in place, and the descriptor is saved after each step, so a flow that
+ * fails or is abandoned halfway resumes instead of paying again. The
+ * session key can only append pieces to this wallet's data sets; it
+ * cannot move funds or delete anything. Every step reports progress and
+ * every failure surfaces as an error with the step it happened in.
  */
 import {
-  AddPiecesPermission, calibration, createWalletClient, custom, generatePrivateKey, loginSync,
+  AddPiecesPermission, calibration, createWalletClient, custom, generatePrivateKey, getExpirations, loginSync,
   parseUnits, privateKeyToAccount, publicActions, Synapse,
 } from './foc-deps.js'
 
@@ -46,10 +48,16 @@ async function openDb() {
   request.onupgradeneeded = () => request.result.createObjectStore(STORE)
   return idb(request)
 }
-export async function loadDescriptor() {
+/** Whatever is saved, complete or not (a flow that stopped before the data set step). */
+async function loadSaved() {
   if (typeof indexedDB === 'undefined') return null
   const db = await openDb()
   const saved = await idb(db.transaction(STORE).objectStore(STORE).get(KEY))
+  return saved != null && typeof saved === 'object' ? saved : null
+}
+/** A complete player descriptor, or null. */
+export async function loadDescriptor() {
+  const saved = await loadSaved()
   if (saved?.ds && saved?.wallet && saved?.sessionKey) return saved
   return null
 }
@@ -150,40 +158,78 @@ export async function provisionPlayer({
     throw step('storage balance', err)
   }
 
-  // 3. Session key: minted here, authorized for AddPieces only.
-  const sessionKey = generatePrivateKey()
-  const sessionAddress = privateKeyToAccount(sessionKey).address
-  const expiresAt = BigInt(Math.floor(Date.now() / 1000) + validityDays * 86400)
-  try {
-    onProgress(`confirm the session key (AddPieces only, ${validityDays} days)`)
-    await loginSync(wallet, {
-      address: sessionAddress,
-      permissions: [AddPiecesPermission],
-      expiresAt,
-      onHash: () => onProgress('session key submitted, waiting for the chain'),
-    })
-  } catch (err) {
-    throw step('session key', err)
+  // 3. Session key: this browser's, if the chain still honors it for this
+  //    wallet; otherwise minted here and authorized for AddPieces only.
+  const prior = await loadSaved().catch(() => null)
+  const sameWallet = prior?.wallet != null && String(prior.wallet).toLowerCase() === String(address).toLowerCase()
+  let { sessionKey, expiresAt } = sameWallet ? await liveSessionKey(wallet, address, prior, onProgress) : {}
+  if (sessionKey == null) {
+    sessionKey = generatePrivateKey()
+    const sessionAddress = privateKeyToAccount(sessionKey).address
+    expiresAt = BigInt(Math.floor(Date.now() / 1000) + validityDays * 86400)
+    try {
+      onProgress(`confirm the session key (AddPieces only, ${validityDays} days)`)
+      await loginSync(wallet, {
+        address: sessionAddress,
+        permissions: [AddPiecesPermission],
+        expiresAt,
+        onHash: () => onProgress('session key submitted, waiting for the chain'),
+      })
+    } catch (err) {
+      throw step('session key', err)
+    }
   }
+  // The key is authorized: remember it now, so a failure in the data set
+  // step (or a closed tab) never costs another login transaction.
+  const partial = { ds: sameWallet ? prior.ds ?? null : null, wallet: address, sessionKey, expiresAt: Number(expiresAt) * 1000 }
+  await saveDescriptor(partial)
 
-  // 4. The player's data set: reuse this app's if the wallet has one.
+  // 4. The player's data set: the saved one, else this app's by metadata
+  //    tag, else a new one. Only a new data set needs the genesis upload
+  //    (that upload is what makes the provider create it).
   let ds
   try {
     onProgress('finding or creating your game data set')
-    const ctx = await synapse.storage.createContext({})
-    if (ctx.dataSetId == null) onProgress('sign to create your data set (the provider submits the transaction)')
-    else onProgress(`sign to confirm data set #${ctx.dataSetId}`)
-    const genesis = JSON.stringify({ v: 2, type: 'genesis', purpose: 'foc-collab BYOW player log', wallet: address })
-    await ctx.upload(new TextEncoder().encode(genesis.padEnd(MIN_PIECE_BYTES, ' ')), {
-      onPiecesAdded: () => onProgress('data set transaction submitted'),
-    })
+    const ctx = await synapse.storage.createContext(partial.ds != null ? { dataSetId: Number(partial.ds) } : {})
+    if (ctx.dataSetId != null) {
+      onProgress(`using data set #${ctx.dataSetId}`)
+    } else {
+      onProgress('sign to create your data set (the provider submits the transaction)')
+      const genesis = JSON.stringify({ v: 2, type: 'genesis', purpose: 'foc-collab BYOW player log', wallet: address })
+      await ctx.upload(new TextEncoder().encode(genesis.padEnd(MIN_PIECE_BYTES, ' ')), {
+        onPiecesAdded: () => onProgress('data set transaction submitted'),
+      })
+    }
     ds = String(ctx.dataSetId)
   } catch (err) {
     throw step('data set', err)
   }
 
-  const descriptor = { ds, wallet: address, sessionKey, expiresAt: Number(expiresAt) * 1000 }
+  const descriptor = { ...partial, ds }
   await saveDescriptor(descriptor)
   onProgress('ready')
   return descriptor
+}
+
+const REUSE_MARGIN_S = 3600 // a key about to expire is not worth reusing
+
+/**
+ * The saved session key for `address`, if the chain says it is still
+ * authorized for AddPieces with more than an hour left. `expiresAt` comes
+ * from the chain, not from the descriptor, so a key revoked or re-issued
+ * elsewhere is not trusted here.
+ */
+async function liveSessionKey(client, address, prior, onProgress) {
+  if (typeof prior?.sessionKey !== 'string') return {}
+  try {
+    onProgress('checking your session key')
+    const sessionKeyAddress = privateKeyToAccount(prior.sessionKey).address
+    const expirations = await getExpirations(client, { address, sessionKeyAddress, permissions: [AddPiecesPermission] })
+    const expiresAt = expirations[AddPiecesPermission] ?? 0n
+    if (expiresAt <= BigInt(Math.floor(Date.now() / 1000) + REUSE_MARGIN_S)) return {}
+    return { sessionKey: prior.sessionKey, expiresAt }
+  } catch (err) {
+    console.warn('session key check failed, minting a new one', err)
+    return {}
+  }
 }
