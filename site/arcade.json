@@ -1,0 +1,9 @@
+{
+  "network": "calibration",
+  "wallet": "0xB4Ef10f016fF038f6eE71AbD70067003B6E964a9",
+  "dataSet": "35446",
+  "authorizer": "0x60c38acea058846866b1a2a5bdae7f0e25c9b28b",
+  "policy": { "cooldownEpochs": 4, "maxPiecesPerOp": 1, "budgetPerWindow": 200, "windowEpochs": 2880 },
+  "created": "2026-09-11",
+  "setup": "PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY node scripts/sponsor-setup.mjs"
+}

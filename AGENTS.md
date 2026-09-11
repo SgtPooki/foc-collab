@@ -49,6 +49,14 @@ the only order the fold trusts is piece id inside one data set.
   attaches it to a scratch data set with `setDataSetAuthorizer`, and writes
   through it with a key that holds no session key (~10 min; proven
   2026-09-11, see `docs/FEASIBILITY.md`)
+- The arcade (sponsored writes): `site/arcade.json` records the arcade
+  wallet, its data set (35446), the `ArcadeAuthorizer` address, and the
+  policy; `PRIVATE_KEY=$PLAYER_ARCADE_PRIVATE_KEY node scripts/sponsor-setup.mjs`
+  is the owner-side setup (reuse with `AUTHORIZER_ADDRESS` and
+  `ARCADE_DATA_SET` set). Site configs carry `sponsored: { ds, payer }`;
+  pages write to it with `transport.appendSponsored()` as a guest key
+  minted in the browser. The arcade wallet lives in `.env` as
+  `PLAYER_ARCADE_PRIVATE_KEY`; only the owner retunes the policy
 - Publish via the `publish` skill (`.claude/skills/publish/SKILL.md`);
   always source `config.env` + `.env` before any filecoin-pin command
 
@@ -91,8 +99,10 @@ the only order the fold trusts is piece id inside one data set.
 - `apps/corgi/`: the FOC corgi: life is the runway of a Filecoin Pay
   payer account (`fold.js` pure, `chain.js` reads, `park3d.js` three.js).
   Its own bundler, `build.mjs`
-- `contracts/authorizer/`: `CooldownAuthorizer.sol`, a data set ACL
-  (foundry project; `out/` is ignored)
+- `contracts/authorizer/`: `ArcadeAuthorizer.sol` (the site's policy:
+  per-guest cooldown, piece cap, global budget per window, blocklist,
+  pause; owner-tunable) and `CooldownAuthorizer.sol` (the minimal spike).
+  Foundry project, `via_ir`; `out/` is ignored
 - `scripts/`: owner setup, build, chain spike scripts
 - `docs/FEASIBILITY.md`: architecture rationale, security model, blockers,
   dated updates as things are proven

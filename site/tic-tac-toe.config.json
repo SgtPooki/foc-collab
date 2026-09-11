@@ -1,1 +1,4 @@
-{ "mode": "byow" }
+{
+  "mode": "byow",
+  "sponsored": { "ds": "35446", "payer": "0xB4Ef10f016fF038f6eE71AbD70067003B6E964a9" }
+}

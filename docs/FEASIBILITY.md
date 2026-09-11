@@ -146,7 +146,22 @@ Consequences:
   `expirations` value to the session-key account, since that account signs
   only when its local expirations allow and an authorizer key is not in the
   registry; and it treats an unnamed revert from the provider's `addPieces`
-  simulation as the refusal signal. Metadata- or size-based rules need the authorizer to decode
+  simulation as the refusal signal.
+- **Update 2026-09-11, later: the site has a sponsored data set.**
+  `contracts/authorizer/src/ArcadeAuthorizer.sol` adds what the spike
+  lacked: a global budget per window across all guests, a per-operation
+  piece cap, a blocklist, a pause switch, and an owner who can retune
+  the policy without redeploying. `scripts/sponsor-setup.mjs` deployed it
+  at `0x60c38acea058846866b1a2a5bdae7f0e25c9b28b` from a dedicated arcade
+  wallet, created data set 35446 owned by that wallet, attached the
+  authorizer, and wrote one piece as a guest through
+  `games/lib/transport-byow.js` `appendSponsored()` (a secp256k1 key
+  minted in memory, no wallet, no session key): stored, submitted 3
+  seconds later, confirmed 60 seconds after that. `site/arcade.json`
+  records the addresses; the site configs carry `sponsored: { ds, payer }`.
+  A global budget bounds spend but not who spends it; admission (a wallet
+  link, a passkey, an allowlist) is the next layer, and signer recovery
+  is still secp256k1 only. Metadata- or size-based rules need the authorizer to decode
   `operationData` itself; the Cid struct carries only the CommP bytes, so a
   byte-size cap would parse the multihash. Unlocked by this: sponsored
   writes (no wallet in the browser at all), per-epoch move cooldowns as

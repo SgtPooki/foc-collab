@@ -30,7 +30,7 @@
  */
 import {
   AddPiecesPermission, calibration, createPublicClient, custom, fromSecp256k1,
-  getActivePiecesByCursor, getDataSet, getExpirations, getPDPProvider, http, Synapse,
+  generatePrivateKey, getActivePiecesByCursor, getDataSet, getExpirations, getPDPProvider, http, privateKeyToAccount, Synapse,
 } from './foc-deps.js'
 import { scan, TAG_APP, TAG_GAME, TAG_TYPE } from './discover.js'
 import { homeLog } from './byow-engine.js'
@@ -161,6 +161,51 @@ async function openWriter(transport, me, source) {
   }
 }
 
+/**
+ * Writer for a sponsored data set: one the arcade's wallet pays for, with
+ * a data set authorizer attached (contracts/authorizer) that admits any
+ * secp256k1 key under its policy. The guest key is minted here and kept
+ * in storage; it holds no session key and is never registered anywhere,
+ * so the SDK's local expirations are set far in the future to let it sign
+ * (the chain, not the registry, decides). `sponsored` = { ds, payer }.
+ */
+async function openSponsoredWriter(transport, sponsored, storage, source) {
+  const KEY = 'ttt:byow:guest-key'
+  let privateKey = storage.get(KEY)
+  if (typeof privateKey !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
+    privateKey = generatePrivateKey()
+    storage.set(KEY, privateKey)
+  }
+  const guest = privateKeyToAccount(privateKey).address
+  const expirations = { [AddPiecesPermission]: 2n ** 40n }
+  const synapse = Synapse.create({
+    account: sponsored.payer,
+    chain: calibration,
+    transport: custom({ request: transport({ chain: calibration, retryCount: 0 }).request }),
+    sessionKey: fromSecp256k1({ privateKey, root: sponsored.payer, chain: calibration, transport, expirations }),
+    source,
+    requiredPermissions: [AddPiecesPermission],
+  })
+  const ctx = await synapse.storage.createContext({ dataSetId: Number(sponsored.ds) })
+  return {
+    ds: String(sponsored.ds),
+    guest,
+    async append(piece, onProgress, tags) {
+      onProgress?.('uploading to the sponsored data set')
+      await new Promise((resolve, reject) => {
+        ctx.upload(encodePiece(piece), {
+          pieceMetadata: tags,
+          onStored: () => onProgress?.('stored by the provider'),
+          onPiecesAdded: () => {
+            onProgress?.('submitted on-chain')
+            resolve()
+          },
+        }).then(() => onProgress?.('confirmed'), reject)
+      })
+    },
+  }
+}
+
 export async function createByowTransport(config = {}) {
   const storage = config.storage ?? defaultStorage()
   const transport = http(RPC)
@@ -171,6 +216,8 @@ export async function createByowTransport(config = {}) {
   const problems = new Map() // ds -> last error message
   const known = new Set([...(config.peers ?? []).map(String)])
   if (me != null) known.add(String(me.ds))
+  const sponsored = config.sponsored?.ds != null && config.sponsored?.payer != null ? config.sponsored : null
+  if (sponsored != null) known.add(String(sponsored.ds))
 
   // Immutable bodies cached by CID, and per data set the ids we have ever
   // seen (id -> cid) so a piece that later disappears from the active list
@@ -201,6 +248,14 @@ export async function createByowTransport(config = {}) {
   }
 
   const writer = me == null ? null : await openWriter(transport, me, 'foc-collab-byow')
+  // The sponsored writer is opened lazily: a page that only reads the
+  // sponsored data set should not mint a guest key or hit the provider.
+  let sponsorWriter = null
+  async function sponsor() {
+    if (sponsored == null) throw new Error('this page has no sponsored data set')
+    sponsorWriter ??= await openSponsoredWriter(transport, sponsored, storage, 'foc-collab-byow')
+    return sponsorWriter
+  }
 
   // PieceAdded(dataSetId indexed, pieceId indexed, pieceCid, keys, values)
   const pieceAdded = calibration.contracts.fwss.abi.find((e) => e.type === 'event' && e.name === 'PieceAdded')
@@ -323,6 +378,17 @@ export async function createByowTransport(config = {}) {
     async append(piece, onProgress, tags) {
       if (writer == null) throw new Error('read-only: no wallet and session key configured')
       await writer.append(piece, onProgress, tags)
+    },
+    /** The sponsored data set this page may write to as a guest, or null. */
+    sponsored: sponsored == null ? null : { ds: String(sponsored.ds), payer: sponsored.payer, log: homeLog(sponsored.ds) },
+    /** Append to the sponsored data set through its authorizer (a guest key minted in this browser). */
+    async appendSponsored(piece, onProgress, tags) {
+      const w = await sponsor()
+      await w.append(piece, onProgress, tags)
+    },
+    /** This browser's guest address on the sponsored data set (mints the key if needed). */
+    async guestAddress() {
+      return (await sponsor()).guest
     },
     async list() {
       const results = await Promise.all([...known].map(async (ds) => {

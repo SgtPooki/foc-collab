@@ -62,7 +62,9 @@ export function pageConfig() {
 
 /**
  * BYOW: the page config carries only public settings ({ mode: 'byow',
- * lobbyBlocks?, logRpcs? }); no key of anyone's. Each player's own
+ * lobbyBlocks?, logRpcs?, sponsored?: { ds, payer } }); no key of anyone's.
+ * `sponsored` names a data set the arcade pays for, with an authorizer
+ * attached, that any visitor may append to as a guest. Each player's own
  * descriptor ({ ds, wallet, sessionKey }) is made in the page by
  * wallet-byow.js from their connected wallet and kept in IndexedDB.
  * Without one the page is a read-only spectator that offers "connect
@@ -87,7 +89,7 @@ export async function createTransport() {
     const { createByowTransport } = await import('./transport-byow.js')
     const me = await loadMyDescriptor()
     const peers = ['x', 'o'].map((k) => params.get(k)).filter((v) => v != null && v !== '')
-    return createByowTransport({ me, peers, lobbyBlocks: config?.lobbyBlocks, logRpcs: config?.logRpcs })
+    return createByowTransport({ me, peers, lobbyBlocks: config?.lobbyBlocks, logRpcs: config?.logRpcs, sponsored: config?.sponsored })
   }
   if (config == null) return localTransport()
   const { createFocTransport } = await import('./transport-foc.js')
