@@ -138,6 +138,30 @@ test('a create whose cpu equals its own token is a normal 1v1 game', () => {
   assert.equal(s.seats.O, null)
 })
 
+test('resign: the creator closes an unseated game; a seated player hands the other seat the win', () => {
+  reset()
+  const c = create()
+  const quit = piece(DS_A, { type: 'resign', token: A }, 'q:a')
+  const s1 = foldBoth([c, quit])
+  assert.equal(s1.closed, true)
+  assert.equal(s1.winner, 'closed')
+  assert.equal(status(s1), 'closed')
+  // a stranger's resign from another data set closes nothing
+  reset()
+  const c2 = create()
+  const stranger = piece(DS_C, { type: 'resign', token: C }, 'q:c')
+  assert.equal(foldBoth([c2, stranger]).closed, false)
+  // after ratification, O resigns: X wins, and later moves are ignored
+  const { pieces, r } = opening()
+  const oQuits = piece(DS_B, { type: 'resign', token: B }, 'q:b')
+  const late = move(DS_B, B, 1, 0, r.ref)
+  const s2 = foldBoth([...pieces, oQuits, late])
+  assert.equal(s2.winner, 'X')
+  assert.equal(s2.resigned, 'O')
+  assert.equal(s2.board[0], null)
+  assert.equal(status(s2), 'X won (O resigned)')
+})
+
 test('before ratification, joiners are candidates, not O', () => {
   reset()
   const c = create()

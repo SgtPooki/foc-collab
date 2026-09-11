@@ -7,7 +7,7 @@
  *
  * The page's markup must provide these ids: transport-label, intro,
  * wallet-row, connect, wallet-status, banner, lobby, create, games,
- * lobby-empty, game, share, join, link-back, rematch, notify, board,
+ * lobby-empty, game, share, join, link-back, rematch, resign, notify, board,
  * status, log-info, byow-meta; and create-cpu when the spec has a cpu.
  *
  * Solo play (BYOW only): with `spec.cpu`, "play the computer" creates a
@@ -127,20 +127,23 @@ export async function mountGame(spec) {
     const games = foldLobby(pieces)
     $('lobby-empty').hidden = games.length > 0
     const joined = (g) => mySeat(g) != null || joinedByMe(g)
+    const live = games.filter((g) => !g.closed)
     // Games waiting on this player come first: the lobby is the "several
     // games at once" view where a minute per move stops mattering.
     const myTurn = (g) => mySeat(g) != null && mySeat(g) === g.next && g.winner == null && g.seats.O != null
-    const mine = games.filter((g) => joined(g)).sort((a, b) => Number(myTurn(b)) - Number(myTurn(a)))
+    const mine = live.filter((g) => joined(g) && g.winner == null).sort((a, b) => Number(myTurn(b)) - Number(myTurn(a)))
+    const finished = live.filter((g) => joined(g) && g.winner != null)
     const waiting = mine.filter(myTurn).length
     document.title = waiting > 0 ? `● ${waiting} waiting on you — ${spec.name}` : `${spec.name} on a piece log`
-    const open = games.filter((g) => !joined(g) && g.seats.O == null)
-    const rest = games.filter((g) => !joined(g) && g.seats.O != null)
+    const open = live.filter((g) => !joined(g) && g.seats.O == null)
+    const rest = live.filter((g) => !joined(g) && g.seats.O != null)
     create.disabled = busy != null || (byow && transport.me == null)
     if (byow && transport.me == null) create.textContent = 'spectating: connect a wallet to play'
     $('games').replaceChildren(
       ...lobbySection('your games', mine),
       ...lobbySection('open to join', open.slice(0, 15), open.length),
       ...lobbySection('other games', rest.slice(0, 15), rest.length),
+      ...lobbySection('your finished games', finished.slice(0, 10), finished.length),
     )
   }
 
@@ -184,6 +187,11 @@ export async function mountGame(spec) {
     const playable = state.seats.O != null || ratifying
     renderByowMeta(state, iJoined)
     $('rematch').hidden = !(state.winner != null && seat != null && busy == null)
+    // A seated player may end the game: "close" while nobody else is
+    // seated, "resign" once the game is on. Both are a resign piece.
+    const canEnd = byow && seat != null && state.winner == null && busy == null && pendingMove == null
+    $('resign').hidden = !canEnd
+    $('resign').textContent = state.seats.O == null ? 'close game' : 'resign'
     $('notify').hidden = !('Notification' in window) || Notification.permission !== 'default'
       || seat == null || state.winner != null
     const canMove = seat != null && seat === state.next && state.winner == null
@@ -429,6 +437,13 @@ export async function mountGame(spec) {
     return url.toString()
   }, `copy link for ${seatNames.X}`)
   copyButton('share', () => location.href, 'copy invite link')
+
+  $('resign').onclick = async () => {
+    const state = foldGame(pieces)
+    const label = state.seats.O == null ? 'closing the game' : 'resigning'
+    if (!confirm(state.seats.O == null ? 'Close this game? It leaves the lobby once the piece settles.' : 'Resign? Your opponent wins.')) return
+    await append({ v: V, type: 'resign', game: gameId }, label)
+  }
 
   $('rematch').onclick = () => {
     const state = foldGame(pieces)

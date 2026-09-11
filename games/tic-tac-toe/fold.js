@@ -53,7 +53,8 @@ export function seatOf(state, token) {
 export function status(state) {
   if (state.seats.X == null) return 'unregistered'
   if (state.winner === 'draw') return 'draw'
-  if (state.winner != null) return `${state.winner} won`
+  if (state.winner === 'closed') return 'closed'
+  if (state.winner != null) return `${state.winner} won${state.resigned != null ? ` (${state.resigned} resigned)` : ''}`
   if (state.seats.O == null) return 'waiting for opponent'
   return `${state.next} to move`
 }

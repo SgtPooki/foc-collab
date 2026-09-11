@@ -48,8 +48,15 @@
  * two writers apart by token. No join, no ratification, no second data
  * set: a solo game costs only its own pieces.
  *
+ * Resigning: a `resign` piece from a seat's home data set ends the game.
+ * After ratification the other seat wins (`resigned` names who left);
+ * before it, a resign from the root closes the game (`closed: true`,
+ * winner 'closed') so lobbies can drop it. The log keeps everything;
+ * nothing is deleted, the fold just knows the game is over.
+ *
  * Piece shapes:
  *   { v: 2, app, log, type: 'create', game, token, name?, cpu? }
+ *   { v: 2, app, log, type: 'resign', game, token }
  *   { v: 2, app, log, type: 'join',   game, token, prev }
  *   { v: 2, app, log, type: 'move',   game, token, seq, prev, cell, o? }
  *     o = { token, ds } only on seq 0 (the ratification)
@@ -72,6 +79,8 @@ export function initialByowState(game, root, rules) {
     joins: [], // candidate joiners before ratification: { token, ds, ref }
     hints: [], // data sets named by X's ratification pieces; a root-only reader must fetch them
     solo: false, // O is a bot identity in the creator's browser, writing to the same data set
+    closed: false, // the creator resigned before anyone was seated
+    resigned: null, // the seat that resigned a ratified game
     ratified: false,
     lastRef: null,
   }
@@ -157,7 +166,7 @@ export function foldByow(game, root, pieces, rules) {
       solo: true,
       ratified: true,
     }
-    return finish(playMoves(state, all, rules))
+    return finish(withResign(state, all, rules))
   }
 
   const joins = all
@@ -184,8 +193,36 @@ export function foldByow(game, root, pieces, rules) {
     state = placeMove(state, 'X', move, rules)
     break
   }
-  if (!state.ratified) return finish(state)
-  return finish(playMoves(state, all, rules))
+  if (!state.ratified) return finish(closed(state, all))
+  return finish(withResign(state, all, rules))
+}
+
+/** An unratified game whose creator resigned from the root is closed. */
+function closed(state, all) {
+  const quit = all.find((p) => p.type === 'resign' && p.src === state.root)
+  if (quit == null) return state
+  return { ...state, closed: true, winner: 'closed', applied: state.applied + 1 }
+}
+
+/**
+ * Plays a ratified game, honoring a resign. The first resign from either
+ * home (by token when both seats share a home) takes effect at its piece
+ * id: that seat's later pieces do not count, and if the board is not
+ * already decided the other seat wins.
+ */
+function withResign(state, all, rules) {
+  const seatOfPiece = (p) => {
+    if (state.homes.X === state.homes.O) return p.token === state.seats.X ? 'X' : (p.token === state.seats.O ? 'O' : null)
+    if (p.src === state.homes.X) return 'X'
+    return p.src === state.homes.O ? 'O' : null
+  }
+  const quit = all.find((p) => p.type === 'resign' && seatOfPiece(p) != null)
+  if (quit == null) return playMoves(state, all, rules)
+  const seat = seatOfPiece(quit)
+  const before = all.filter((p) => !(seatOfPiece(p) === seat && idOf(p) > idOf(quit)))
+  const played = playMoves(state, before, rules)
+  if (played.winner != null) return played
+  return { ...played, winner: seat === 'X' ? 'O' : 'X', resigned: seat, applied: played.applied + 1 }
 }
 
 /** The bot token of a solo create piece, or null. It must differ from the creator's. */

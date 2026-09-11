@@ -71,10 +71,11 @@ export async function mountDashboard({ apps }) {
     for (const a of apps) {
       const games = a.lobby(pieces.filter((p) => p.app === a.app))
       for (const g of games) {
+        if (g.closed) continue
         const seat = a.seatOf(g, me)
         const joined = seat != null || (me != null && (g.joins ?? []).some((j) => j.ds === me))
         if (joined && seat != null && seat === g.next && g.winner == null && g.seats.O != null) waiting.push(row(a, g, seat))
-        else if (joined) yours.push(row(a, g, seat))
+        else if (joined && g.winner == null) yours.push(row(a, g, seat))
         else if (g.seats.O == null && g.seats.X != null && !g.solo) open.push(row(a, g, null))
       }
     }
