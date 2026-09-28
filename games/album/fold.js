@@ -67,7 +67,9 @@ export function usablePhoto(p, id) {
 
 /**
  * The album as the page shows it:
- *   { exists, title, photos: [{ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }], ignored }
+ *   { exists, title, photos: [{ ref, src, pieceId, token, blob, thumb, w, h, caption, meta, epoch }], ignored }
+ * `epoch` is the membership epoch whose key sealed the photo (members-only
+ * albums; the page annotates it from the outer piece), undefined otherwise.
  */
 export function foldAlbum({ root, id }, pieces, { onlySrcs = null } = {}) {
   const mine = pieces.filter((p) => p != null && p.app === APP && p.v === 2 && p.album === id && (onlySrcs == null || onlySrcs.has(p.src)))
@@ -87,7 +89,7 @@ export function foldAlbum({ root, id }, pieces, { onlySrcs = null } = {}) {
   const kept = photos
     .filter((p) => !removed.has(p.ref))
     .sort((a, b) => Number(a.src) - Number(b.src) || byPieceId(a, b))
-    .map(({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }) => ({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }))
+    .map(({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta, epoch }) => ({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta, epoch }))
   const counted = (creation == null ? 0 : 1) + photos.length + removals.length
   return { exists: creation != null, title: creation?.title ?? null, photos: kept, ignored: mine.length - counted }
 }
@@ -109,13 +111,14 @@ const B64U = /^[A-Za-z0-9_-]+$/
  *       trusts); `revoke` removes wallets, each entry grants its `to`
  *       wallet the keyring for epochs 0..epoch. Epochs never go back.
  *
- * Returns { epoch, members, removed, requests, grants, memberSrcs }:
+ * Returns { epoch, members, removed, requests, grants, memberSrcs, encOf }:
  *   epoch       the current membership epoch
  *   members     wallets (lowercase) granted and not removed since
  *   removed     wallets removed and not granted since
  *   requests    [{ wallet, enc, src }] joins by wallets never granted or removed
  *   grants      Map wallet -> { epoch, epk, box }: each member's latest grant
  *   memberSrcs  Set of data sets whose photos count: root and members' joins
+ *   encOf       Map wallet -> the X25519 key from its first join (for re-granting)
  */
 export function foldMembers({ root, id }, pieces) {
   const mine = pieces.filter((p) => p != null && p.app === APP && p.v === 2 && p.album === id)
@@ -143,8 +146,10 @@ export function foldMembers({ root, id }, pieces) {
   const memberSrcs = new Set([String(root)])
   const requests = []
   const asked = new Set()
+  const encOf = new Map()
   for (const j of joins) {
     const w = j.wallet.toLowerCase()
+    if (!encOf.has(w)) encOf.set(w, j.enc)
     if (status.get(w) === 'member') memberSrcs.add(j.src)
     if (!status.has(w) && !asked.has(w)) {
       asked.add(w)
@@ -152,7 +157,7 @@ export function foldMembers({ root, id }, pieces) {
     }
   }
   const walletsWith = (s) => [...status].filter(([, v]) => v === s).map(([w]) => w)
-  return { epoch, members: walletsWith('member'), removed: walletsWith('removed'), requests, grants, memberSrcs }
+  return { epoch, members: walletsWith('member'), removed: walletsWith('removed'), requests, grants, memberSrcs, encOf }
 }
 
 function usableKeys(p) {

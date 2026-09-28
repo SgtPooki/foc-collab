@@ -102,6 +102,7 @@ test('a join is a request until the owner grants it; a grant makes a member whos
   assert.deepEqual(granted.requests, [])
   assert.deepEqual([...granted.memberSrcs].sort(), [ROOT, '200'])
   assert.equal(granted.grants.get(BOB).epoch, 0)
+  assert.equal(granted.encOf.get(BOB), KEY)
 })
 
 test('removal moves the epoch on, drops the member\'s data set, and a later grant brings them back', () => {
