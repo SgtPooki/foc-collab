@@ -101,6 +101,22 @@ export async function fetchBounded(url, max = MAX_PIECE_BYTES) {
   return bytes
 }
 
+/**
+ * Whether a cached body must be (re)fetched. Junk is cached as null (the
+ * fold ignores nulls); a body refused as too big is cached as the cap it
+ * failed under, because pages on one origin share the cache and a page
+ * with a higher cap must still fetch it.
+ */
+export function needsFetch(cached, maxPieceBytes) {
+  return cached === undefined || (typeof cached === 'number' && cached < maxPieceBytes)
+}
+
+/** A cached body as a piece annotated with where it came from, or null for junk and refusals. */
+export function toPiece(body, ds, pieceId, extra = {}) {
+  if (body == null || typeof body !== 'object') return null
+  return { ...body, src: ds, pieceId, ...extra }
+}
+
 // Progress copy for upload(): where the bytes are going, as the player reads it.
 export const OWN = { dataSet: 'your data set', provider: 'your provider' }
 export const SPONSORED = { dataSet: 'the sponsored data set', provider: 'the provider' }
@@ -356,14 +372,14 @@ export async function createByowTransport(config = {}) {
   async function listOne(ds, full) {
     const r = await reader(ds)
     const { entries, full: listedAll } = await activeEntries(r, ds, full)
-    const missing = entries.filter(({ cid }) => !bodies.has(cid))
+    const missing = entries.filter(({ cid }) => needsFetch(bodies.get(cid), maxPieceBytes))
     const BATCH = 8
     for (let i = 0; i < missing.length; i += BATCH) {
       await Promise.all(missing.slice(i, i + BATCH).map(async ({ cid }) => {
         try {
           bodies.set(cid, JSON.parse(new TextDecoder().decode(await fetchBounded(r.pieceUrl(cid), maxPieceBytes))))
-        } catch {
-          bodies.set(cid, null) // junk piece: the fold ignores nulls
+        } catch (err) {
+          bodies.set(cid, err instanceof OversizedPiece ? maxPieceBytes : null) // see needsFetch
         }
       }))
     }
@@ -376,11 +392,7 @@ export async function createByowTransport(config = {}) {
     if (missing.length > 0 || entries.length > 0) persist()
     if (listedAll) removedIds.set(ds, Object.keys(seen[ds]).filter((id) => !activeNow.has(id)))
     const removed = removedIds.get(ds) ?? []
-    const annotate = (id, cid, extra) => {
-      const body = bodies.get(cid)
-      if (body == null || typeof body !== 'object') return null
-      return { ...body, src: ds, pieceId: id, ...extra }
-    }
+    const annotate = (id, cid, extra) => toPiece(bodies.get(cid), ds, id, extra)
     return {
       pieces: [
         ...entries.map(({ pieceId, cid }) => annotate(String(pieceId), cid, {})),
@@ -472,10 +484,7 @@ export async function createByowTransport(config = {}) {
           // Keep what we know: previously seen pieces still count for this reader.
           const cached = Object.entries(seen[ds] ?? {})
           return {
-            pieces: cached.map(([id, cid]) => {
-              const body = bodies.get(cid)
-              return body == null ? null : { ...body, src: ds, pieceId: id }
-            }),
+            pieces: cached.map(([id, cid]) => toPiece(bodies.get(cid), ds, id)),
             removed: [],
           }
         }

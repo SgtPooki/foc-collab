@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { fetchBounded, OWN, OversizedPiece, SPONSORED, upload } from './transport-byow.js'
+import { fetchBounded, needsFetch, OWN, OversizedPiece, SPONSORED, toPiece, upload } from './transport-byow.js'
 
 // fetch answers `/len?n=` with a content-length and `/stream?n=` without one.
 const realFetch = globalThis.fetch
@@ -36,6 +36,22 @@ for (const [path, n, max, ok] of [
     else await assert.rejects(got, OversizedPiece)
   })
 }
+
+test('needsFetch: fetch unseen bodies and bodies refused under a smaller cap, never junk or anything else', () => {
+  assert.equal(needsFetch(undefined, 8192), true)
+  assert.equal(needsFetch(null, 65536), false)
+  assert.equal(needsFetch({ v: 2 }, 65536), false)
+  assert.equal(needsFetch(8192, 65536), true) // a chat page refused it; the album page may not
+  assert.equal(needsFetch(8192, 8192), false)
+  assert.equal(needsFetch(65536, 8192), false)
+})
+
+test('toPiece annotates objects and turns junk and cached refusals into null', () => {
+  assert.deepEqual(toPiece({ a: 1 }, '7', '3'), { a: 1, src: '7', pieceId: '3' })
+  assert.deepEqual(toPiece({ a: 1 }, '7', '3', { removed: true }), { a: 1, src: '7', pieceId: '3', removed: true })
+  assert.equal(toPiece(8192, '7', '3'), null)
+  assert.equal(toPiece(null, '7', '3'), null)
+})
 
 test('upload resolves with the PieceCID once AddPieces is submitted, and passes the tags through', async () => {
   const stages = []
