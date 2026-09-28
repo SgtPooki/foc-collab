@@ -90,6 +90,30 @@ async function fetchBounded(url) {
   return bytes
 }
 
+// Progress copy for upload(): where the bytes are going, as the player reads it.
+export const OWN = { dataSet: 'your data set', provider: 'your provider' }
+export const SPONSORED = { dataSet: 'the sponsored data set', provider: 'the provider' }
+
+/**
+ * Uploads bytes through a storage context and resolves with the PieceCID
+ * once stored and the AddPieces transaction is submitted: the piece is
+ * then effectively irrevocable, and the poll loop observes truth. `tags`
+ * are emitted in PieceAdded; they are how others find this data set.
+ */
+export function upload(ctx, bytes, onProgress, tags, where) {
+  onProgress?.(`uploading to ${where.dataSet}`)
+  return new Promise((resolve, reject) => {
+    ctx.upload(bytes, {
+      pieceMetadata: tags,
+      onStored: () => onProgress?.(`stored by ${where.provider}`),
+      onPiecesAdded: (_tx, _provider, pieces) => {
+        onProgress?.('submitted on-chain')
+        resolve(String(pieces[0].pieceCid))
+      },
+    }).then(() => onProgress?.('confirmed'), reject)
+  })
+}
+
 /** Keyless reader for one data set: chain listing in piece-id order plus provider retrieval. */
 async function openReader(client, ds) {
   const dataSetId = BigInt(ds)
@@ -144,21 +168,7 @@ async function openWriter(transport, me, source) {
   const ctx = await synapse.storage.createContext({ dataSetId })
   return {
     writeExpiry: Number(expirations[AddPiecesPermission] ?? 0n) * 1000,
-    async append(piece, onProgress, tags) {
-      onProgress?.('uploading to your data set')
-      // Resolve once stored and the AddPieces transaction is submitted: the
-      // piece is then effectively irrevocable. The poll loop observes truth.
-      await new Promise((resolve, reject) => {
-        ctx.upload(encodePiece(piece), {
-          pieceMetadata: tags, // emitted in PieceAdded; how others find this data set
-          onStored: () => onProgress?.('stored by your provider'),
-          onPiecesAdded: () => {
-            onProgress?.('submitted on-chain')
-            resolve()
-          },
-        }).then(() => onProgress?.('confirmed'), reject)
-      })
-    },
+    append: (piece, onProgress, tags) => upload(ctx, encodePiece(piece), onProgress, tags, OWN),
   }
 }
 
@@ -191,19 +201,7 @@ async function openSponsoredWriter(transport, sponsored, storage, source) {
   return {
     ds: String(sponsored.ds),
     guest,
-    async append(piece, onProgress, tags) {
-      onProgress?.('uploading to the sponsored data set')
-      await new Promise((resolve, reject) => {
-        ctx.upload(encodePiece(piece), {
-          pieceMetadata: tags,
-          onStored: () => onProgress?.('stored by the provider'),
-          onPiecesAdded: () => {
-            onProgress?.('submitted on-chain')
-            resolve()
-          },
-        }).then(() => onProgress?.('confirmed'), reject)
-      })
-    },
+    append: (piece, onProgress, tags) => upload(ctx, encodePiece(piece), onProgress, tags, SPONSORED),
   }
 }
 
