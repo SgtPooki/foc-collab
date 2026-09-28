@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { fold, seatOf } from '../tic-tac-toe/fold.js'
-import { canon, generateIdentity, pieceRef, signPiece, verifyAll, verifyPiece } from './identity.js'
+import { canon, fromB64u, generateIdentity, pieceRef, signPiece, toB64u, verifyAll, verifyPiece } from './identity.js'
 
 test('canon is order-insensitive and drops undefined', () => {
   assert.equal(canon({ b: 1, a: [2, { d: 3, c: 4 }], e: undefined }), canon({ a: [2, { c: 4, d: 3 }], b: 1 }))
@@ -63,4 +63,10 @@ test('transport annotations (src, pieceId) and ref are outside the signature; si
   assert.equal(verified.ref, await pieceRef(piece))
   const smuggled = await signPiece({ ...piece, src: '999' }, alice) // author signs a src field
   assert.equal(await verifyPiece(smuggled), false)
+})
+
+test('toB64u handles inputs too big to spread into one call, and matches node base64url', () => {
+  const big = Uint8Array.from({ length: 200_000 }, (_, i) => (i * 31) % 256)
+  assert.equal(toB64u(big), Buffer.from(big).toString('base64url'))
+  assert.deepEqual(fromB64u(toB64u(big)), big)
 })

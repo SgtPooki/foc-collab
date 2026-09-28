@@ -15,9 +15,14 @@ const ALG = { name: 'ECDSA', namedCurve: 'P-256' }
 const SIG = { name: 'ECDSA', hash: 'SHA-256' }
 const subtle = globalThis.crypto.subtle
 
-const toB64u = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)))
-  .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
-const fromB64u = (s) => Uint8Array.from(
+/** base64url, no padding. Built in pieces: spreading a large array into one call overflows. */
+export function toB64u(bytes) {
+  const u8 = new Uint8Array(bytes)
+  let bin = ''
+  for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000))
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+}
+export const fromB64u = (s) => Uint8Array.from(
   atob(s.replaceAll('-', '+').replaceAll('_', '/')), (c) => c.charCodeAt(0))
 
 /** Canonical serialization: JSON with recursively sorted object keys. */
