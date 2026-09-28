@@ -19,6 +19,8 @@
  *     me?:       { ds, wallet, sessionKey }   omit for a read-only spectator
  *     peers?:    [ds, ...]                    data sets to read from the start
  *     storage?:  { get(key), set(key, value) } cache; localStorage in browsers
+ *     maxPieceBytes?: largest JSON piece list() will buffer (default 8 KiB);
+ *                an app whose pieces carry sealed thumbnails raises it
  *     logRpcs?:  [url, ...]  RPCs for eth_getLogs scans, tried in order. The
  *                default glif endpoint fails browser CORS on log responses
  *                over ~100 KB (2026-09-10), so scans default to filfox then
@@ -63,11 +65,20 @@ function defaultStorage() {
   }
 }
 
-async function fetchBounded(url) {
+export class OversizedPiece extends Error {
+  constructor() {
+    super('oversized piece')
+  }
+}
+
+export async function fetchBounded(url, max = MAX_PIECE_BYTES) {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`fetch ${res.status}`)
   const length = Number(res.headers.get('content-length') ?? 0)
-  if (length > MAX_PIECE_BYTES) throw new Error('oversized piece')
+  if (length > max) {
+    await res.body?.cancel()
+    throw new OversizedPiece()
+  }
   const reader = res.body.getReader()
   const chunks = []
   let total = 0
@@ -75,9 +86,9 @@ async function fetchBounded(url) {
     const { done, value } = await reader.read()
     if (done) break
     total += value.length
-    if (total > MAX_PIECE_BYTES) {
+    if (total > max) {
       await reader.cancel()
-      throw new Error('oversized piece')
+      throw new OversizedPiece()
     }
     chunks.push(value)
   }
@@ -169,6 +180,7 @@ async function openWriter(transport, me, source) {
   return {
     writeExpiry: Number(expirations[AddPiecesPermission] ?? 0n) * 1000,
     append: (piece, onProgress, tags) => upload(ctx, encodePiece(piece), onProgress, tags, OWN),
+    appendBlob: (bytes, onProgress, tags) => upload(ctx, bytes, onProgress, tags, OWN),
   }
 }
 
@@ -210,6 +222,7 @@ export async function createByowTransport(config = {}) {
   const transport = http(RPC)
   const client = createPublicClient({ chain: calibration, transport })
   const me = config.me ?? null
+  const maxPieceBytes = config.maxPieceBytes ?? MAX_PIECE_BYTES
 
   const readers = new Map() // ds -> reader | Promise<reader>
   const problems = new Map() // ds -> last error message
@@ -348,7 +361,7 @@ export async function createByowTransport(config = {}) {
     for (let i = 0; i < missing.length; i += BATCH) {
       await Promise.all(missing.slice(i, i + BATCH).map(async ({ cid }) => {
         try {
-          bodies.set(cid, JSON.parse(new TextDecoder().decode(await fetchBounded(r.pieceUrl(cid)))))
+          bodies.set(cid, JSON.parse(new TextDecoder().decode(await fetchBounded(r.pieceUrl(cid), maxPieceBytes))))
         } catch {
           bodies.set(cid, null) // junk piece: the fold ignores nulls
         }
@@ -401,6 +414,20 @@ export async function createByowTransport(config = {}) {
     async append(piece, onProgress, tags) {
       if (writer == null) throw new Error('read-only: no wallet and session key configured')
       await writer.append(piece, onProgress, tags)
+    },
+    /**
+     * Upload raw bytes (a sealed photo) to my own data set; resolves with its
+     * PieceCID. list() yields nothing for such pieces (not JSON, over the
+     * cap); fetchBlob reads them on demand.
+     */
+    async appendBlob(bytes, onProgress, tags) {
+      if (writer == null) throw new Error('read-only: no wallet and session key configured')
+      return writer.appendBlob(bytes, onProgress, tags)
+    },
+    /** A piece's raw bytes from the provider of data set `ds`, refusing more than maxBytes (required). */
+    async fetchBlob(ds, cid, maxBytes) {
+      if (!(maxBytes > 0)) throw new Error('fetchBlob needs maxBytes: the default cap is sized for JSON pieces')
+      return fetchBounded((await reader(String(ds))).pieceUrl(cid), maxBytes)
     },
     /** The sponsored data set this page may write to as a guest, or null. */
     sponsored: sponsored == null ? null : { ds: String(sponsored.ds), payer: sponsored.payer, authorizer: sponsored.authorizer ?? null, log: homeLog(sponsored.ds) },
