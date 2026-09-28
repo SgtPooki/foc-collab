@@ -1,4 +1,4 @@
-# Shared album (in progress)
+# Shared album
 
 A photo album for an event: every contributor brings their own wallet and
 pays for their own storage, and only members can see the photos. Built
@@ -13,17 +13,32 @@ each piece swaps in when it lands. Background and sources:
 | `games/lib/seal.js` | FEE envelopes: `seal(bytes, kek)` / `open(blob, kek)`, a fresh CEK per object, A256KW recipient. Backed by `vendor/foc-encryption` (Kuba's reference implementation) | `@filoz/filecoin-encryption-envelope` (synapse-sdk #967 and its AEAD follow-ups). Swap inside `seal.js` only |
 | `games/lib/album-key.js` | Album key (AK) unlocked by the owner's wallet (typed-data signature → KEK → A256KW, Keysmith-style); wallet-derived X25519 member keys; grants (AK wrapped to a member, bound to the album id); HMAC discovery tag; access-key text for link shares | Keysmith: AK becomes a folder key, grants become `wrapFor` / `openGrant`, and FEE's `-31` recipient replaces our ECDH wrap |
 | `games/lib/transport-byow.js` | `appendBlob` (raw bytes to your own data set, returns the PieceCID), `fetchBlob`, configurable `maxPieceBytes` for sealed log pieces | Programmable ACLs (filecoin-services #563): a P-256 / passkey Authorizer instead of the 2-day session key |
+| `games/album/fold.js` | The pure fold: the creation piece counts only in the root data set, photos from any member, removal by author or owner | |
+| `games/album/app.js`, `index.html` | The page: create an album, unlock with the access key (or the owner's wallet), upload photos, view full size, remove | |
 
-Next: `games/album/fold.js` (album, photo, remove, join, grant) with
-tests, the page on `mountRoom`, and an e2e run where a stranger fails to
-read.
+The page is at `album/` on the site (`site/album.config.json` raises the
+piece cap to 128 KiB). An album link is `?album=<root>.<id>&from=<block>`;
+`from` is where discovery starts, since an album outlives the default
+lookback.
+
+Not built yet: wallet-to-wallet grants in the page (`join` and `grant`
+pieces; the key functions exist in `album-key.js`), and an owner's list
+of albums across browsers (the page lists only albums this browser
+opened).
 
 ## Decisions
 
 - **The log is encrypted too.** FEE `app_metadata` is public, and so is
   every JSON piece. An album piece is
   `{ v: 2, app: 'foc-album', box: <base64url FEE blob> }`, with the real
-  signed piece inside. Order: fetch → open → verify → fold.
+  signed piece inside. Order: fetch → open → verify → fold. The one
+  exception is the creation piece, which also carries the public `lock`
+  (and the album id) outside the box, so the owner can recover the key
+  with their wallet alone.
+- **The page is not built on `mountRoom`.** The room shell is for text
+  posts; the album needs uploads, decryption before verification, and a
+  key prompt, so it boots with `bootByowPage` like the jukebox and reuses
+  the shared transport, discovery, identity, `seal`, and `album-key`.
 - **Readers can be added at any time.** Photos carry a CEK wrapped under
   AK, not a list of viewers, so a new member needs only AK. Photos
   uploaded before they joined open too.

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>shared album on a piece log</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --accent: #2f6fed; }
+  body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: start center; min-height: 100vh; }
+  main { padding: 1rem; max-width: 56rem; width: 100%; box-sizing: border-box; text-align: center; }
+  h1 { font-size: 1.1rem; font-weight: 600; }
+  h2 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.4rem; }
+  a { color: var(--accent); }
+  .meta { font-size: 0.8rem; opacity: 0.7; }
+  button, input { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; padding: 0.35rem 0.7rem; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; opacity: 0.5; }
+  button.primary { border-color: var(--accent); font-weight: 600; }
+  input[type=text] { width: 100%; max-width: 28rem; box-sizing: border-box; }
+  .row { display: flex; gap: 0.5rem; justify-content: center; margin: 0.6rem 0; flex-wrap: wrap; align-items: center; }
+  .panel { border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 1rem; margin: 0.8rem auto; max-width: 36rem; text-align: left; }
+  .panel code { word-break: break-all; font-size: 0.8rem; }
+  .warn { color: #b0761a; font-size: 0.8rem; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; margin: 0.8rem 0; }
+  #grid button { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; aspect-ratio: 1; background: #8881; }
+  #grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #grid .mine { border-color: var(--accent); }
+  #viewer { max-width: min(92vw, 1100px); border: 1px solid var(--line); border-radius: 12px; padding: 0.8rem; }
+  #viewer img { max-width: 100%; max-height: 75vh; display: block; margin: 0 auto; }
+  #viewer::backdrop { background: #000a; }
+  #status { min-height: 1.5em; }
+  #status.error, #viewer-status.error { color: #e5534b; }
+  #status.busy::after { content: ''; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.5s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+  #banner { background: #e5534b22; border: 1px solid #e5534b66; border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="heading">shared album</h1>
+  <p class="meta" id="intro">An album for an event. Every photo is encrypted in your browser and stored in the
+  data set your own wallet pays for; only people holding the album's access key can see them. The page folds
+  every member's data set; there is no server.</p>
+  <p class="meta" id="transport-label"></p>
+  <div class="row" id="wallet-row" hidden>
+    <button id="connect">connect wallet</button>
+    <span class="meta" id="wallet-status"></span>
+  </div>
+  <p id="banner" hidden></p>
+  <p class="meta"><a href="../">← arcade</a></p>
+
+  <!-- no album in the URL: make one, or see the ones this browser made -->
+  <section id="home" hidden>
+    <div class="panel">
+      <h2>start an album</h2>
+      <div class="row"><input id="new-title" type="text" maxlength="80" placeholder="album title, e.g. FIL Dev Summit 2026" /></div>
+      <div class="row"><button id="create" class="primary">create album</button></div>
+      <p class="meta">Your wallet signs twice: once to lock the album's key to it, once more to check it signs the same way every time.</p>
+    </div>
+    <div class="panel" id="my-albums-panel" hidden>
+      <h2>albums this browser opened</h2>
+      <ul id="my-albums"></ul>
+    </div>
+  </section>
+
+  <!-- an album in the URL, but no key in this browser yet -->
+  <section id="unlock" hidden>
+    <div class="panel">
+      <h2>this album is locked</h2>
+      <p class="meta">Paste the access key the album's owner sent you. It is never part of the link.</p>
+      <div class="row"><input id="key-input" type="text" placeholder="access key" autocomplete="off" /></div>
+      <div class="row">
+        <button id="key-open" class="primary">open album</button>
+        <button id="owner-open" hidden>I made this album: unlock with my wallet</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- the album itself -->
+  <section id="album" hidden>
+    <div class="panel" id="share">
+      <h2>invite people</h2>
+      <p class="meta">Send the link and the access key separately (say, the link on a slide and the key in the event chat).</p>
+      <p>link: <code id="share-link"></code> <button id="copy-link">copy</button></p>
+      <p>access key: <code id="share-key"></code> <button id="copy-key">copy</button></p>
+      <p class="warn">Anyone with the key can see every photo and add their own. Keys cannot be taken back.</p>
+    </div>
+    <div class="panel" id="upload-panel">
+      <h2>add photos</h2>
+      <div class="row"><input id="files" type="file" accept="image/*" multiple /></div>
+      <div class="row"><input id="caption" type="text" maxlength="200" placeholder="caption (optional, applies to each photo)" /></div>
+      <div class="row"><button id="upload" class="primary">encrypt and upload</button></div>
+      <p class="meta">Photos are resized to 1600px and re-encoded before encryption, which also strips location data.</p>
+    </div>
+    <div id="grid"></div>
+  </section>
+
+  <p id="status"></p>
+  <p class="meta" id="meta"></p>
+
+  <dialog id="viewer">
+    <img id="viewer-img" alt="" />
+    <p id="viewer-caption"></p>
+    <p class="meta" id="viewer-status"></p>
+    <div class="row">
+      <button id="viewer-remove" hidden>remove from album</button>
+      <button id="viewer-close">close</button>
+    </div>
+  </dialog>
+</main>
+<script type="module">
+import { mountAlbum } from './app.js'
+await mountAlbum()
+</script>
+</body>
+</html>
