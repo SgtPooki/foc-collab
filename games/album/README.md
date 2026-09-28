@@ -35,6 +35,15 @@ read.
   future photos. Keysmith recommends a generated secret shown as words,
   and a narrower capability than the album root. Fine for phase 0 demo
   albums; revisit before real events.
+- **Keys derived from wallet signatures need a reproducible signer.**
+  EOA wallets sign deterministically (RFC 6979: MetaMask and its
+  keyrings, Rabby, Frame, Ledger, Trezor, viem and ethers signers).
+  MPC/threshold wallets may not, and smart accounts and passkey wallets
+  return signatures that are not stable. `album-key.js` refuses contract
+  accounts before the first prompt (`eth_getCode`), signs twice only
+  on a wallet's first derivation, and after that checks the re-derived
+  key against the one the member published, failing loudly on drift.
+  Same approach as Keysmith and swarm-id (snaha/swarm-id#735, #821).
 - **Scheme 1 only** (whole-object AES-GCM). The browser buffers a photo
   anyway; range reads come with the production library.
 - **Calibration demo data only** until the production FEE library ships.

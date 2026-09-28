@@ -22,10 +22,19 @@
  * returns the 65-byte hex signature. `providerSigner` adapts an EIP-1193
  * provider; in node, viem's `account.signTypedData` fits as is.
  *
- * Signatures feed key derivation, so they must be reproducible: we use
- * r ‖ low-s (never v, which wallets report variously) and check a new
- * derivation by signing twice. A wallet that randomizes its signatures
- * cannot hold an album key, and finds out before anything is written.
+ * Signatures feed key derivation, so they must be reproducible. EOA
+ * wallets (MetaMask, Rabby, Frame, Ledger, Trezor, viem/ethers signers)
+ * sign deterministically (RFC 6979); MPC/threshold wallets may not, and
+ * smart accounts and passkey wallets return signatures that are not
+ * stable at all. So, as Keysmith and swarm-id do:
+ * - providerSigner refuses a contract account (code at the address) before
+ *   the first prompt;
+ * - keys use r ‖ low-s (never v, which wallets report variously);
+ * - a new derivation signs twice and compares: new albums, and a member's
+ *   first key. After that the member's published public key is the
+ *   commitment: one prompt, re-derive, compare, and fail loudly on drift;
+ * - the album key is random and wrapped (A256KW checks its integrity), so
+ *   a drifted owner signature fails at unwrap instead of making a new key.
  */
 import { calibration, secp256k1, x25519 } from './foc-deps.js'
 import { fromB64u, toB64u } from './identity.js'
@@ -103,10 +112,20 @@ export async function openAlbumKey(sign, lock) {
   }
 }
 
-/** This wallet's X25519 pair: { privateKey, publicKey } (32 bytes each). Pass check on first use. */
-export async function encryptionKeyPair(sign, { check = false } = {}) {
-  const privateKey = await derive(sign, encryptionKeyTypedData(), 'foc-collab/encryption/v1', { check })
-  return { privateKey, publicKey: x25519.getPublicKey(privateKey) }
+/**
+ * This wallet's X25519 pair: { privateKey, publicKey } (32 bytes each).
+ * `published` is the base64url public key this wallet already posted (its
+ * join piece), or null on first use. First use signs twice and compares;
+ * later uses sign once and must reproduce `published`, else this throws
+ * and the caller must not post a second key.
+ */
+export async function encryptionKeyPair(sign, { published = null } = {}) {
+  const privateKey = await derive(sign, encryptionKeyTypedData(), 'foc-collab/encryption/v1', { check: published == null })
+  const publicKey = x25519.getPublicKey(privateKey)
+  if (published != null && toB64u(publicKey) !== published) {
+    throw new Error('this wallet no longer reproduces the encryption key it published, so grants to that key cannot be opened here; was it restored into different wallet software?')
+  }
+  return { privateKey, publicKey }
 }
 
 // The album id is bound into the KEK, so a grant cannot be replayed as a grant to another album.

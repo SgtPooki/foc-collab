@@ -57,7 +57,7 @@ test('a lock whose nonce is not 16 bytes of hex is refused before the wallet is 
 
 test('a grant opens only for its member and only for its album', async () => {
   const { ak } = await newAlbumKey(signer(owner))
-  const bob = await encryptionKeyPair(signer(member), { check: true })
+  const bob = await encryptionKeyPair(signer(member))
   const grant = await grantTo(ak, bob.publicKey, 'album-1')
   assert.deepEqual(await openGrant(bob.privateKey, grant, 'album-1'), ak)
   await assert.rejects(openGrant(bob.privateKey, grant, 'album-2'), /not for this wallet, or not for album album-2/)
@@ -72,10 +72,41 @@ test('a grant to a low-order public key is refused: its shared secret would be p
   await assert.rejects(grantTo(ak, lowOrder, 'album-1'), /not a usable encryption key/)
 })
 
-test('a member\'s encryption key is the same on every device: derived from the wallet', async () => {
-  const a = await encryptionKeyPair(signer(member))
-  const b = await encryptionKeyPair(signer(member))
-  assert.deepEqual(a.publicKey, b.publicKey)
+test('a member\'s first key signs twice; later keys sign once and reproduce the published key on any device', async () => {
+  let prompts = 0
+  const counting = (typedData) => {
+    prompts++
+    return member.signTypedData(typedData)
+  }
+  const first = await encryptionKeyPair(counting)
+  assert.equal(prompts, 2)
+  const later = await encryptionKeyPair(counting, { published: accessKeyText(first.publicKey) })
+  assert.equal(prompts, 3)
+  assert.deepEqual(later.publicKey, first.publicKey)
+})
+
+test('a member whose wallet no longer reproduces the published key is told, not handed a new key', async () => {
+  const published = accessKeyText((await encryptionKeyPair(signer(member))).publicKey)
+  await assert.rejects(encryptionKeyPair(signer(owner), { published }), /no longer reproduces the encryption key it published/)
+})
+
+test('a member\'s first key is refused when the wallet signs differently each time', async () => {
+  let n = 0
+  const flaky = (typedData) => (n++ % 2 === 0 ? owner : member).signTypedData(typedData)
+  await assert.rejects(encryptionKeyPair(flaky), /differently each time/)
+})
+
+test('providerSigner refuses a contract account before any signature prompt, and checks only once', async () => {
+  const requests = []
+  const contract = {
+    async request({ method }) {
+      requests.push(method)
+      if (method === 'eth_getCode') return '0x6080604052'
+      throw new Error(`unexpected ${method}`)
+    },
+  }
+  await assert.rejects(newAlbumKey(providerSigner(contract, owner.address)), /smart-contract wallet/)
+  assert.deepEqual(requests, ['eth_getCode'])
 })
 
 test('the album tag is stable per album key and differs across albums', async () => {
@@ -110,17 +141,4 @@ test('the access key round-trips as text and rejects anything else', () => {
   const ak = crypto.getRandomValues(new Uint8Array(32))
   assert.deepEqual(accessKeyFromText(` ${accessKeyText(ak)}\n`), ak)
   assert.throws(() => accessKeyFromText('short'), /not an album access key/)
-})
-
-test('providerSigner refuses a contract account before any signature prompt', async () => {
-  const requests = []
-  const contract = {
-    async request({ method }) {
-      requests.push(method)
-      if (method === 'eth_getCode') return '0x6080604052'
-      throw new Error(`unexpected ${method}`)
-    },
-  }
-  await assert.rejects(newAlbumKey(providerSigner(contract, owner.address)), /smart-contract wallet/)
-  assert.deepEqual(requests, ['eth_getCode'])
 })
