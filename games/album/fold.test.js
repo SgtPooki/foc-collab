@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { APP, foldAlbum, usableMeta, usablePhoto } from './fold.js'
+import { APP, foldAlbum, foldMembers, usableMeta, usablePhoto } from './fold.js'
 
 const ROOT = '100'
 const ID = 'a1b2c3d4'
@@ -84,4 +84,67 @@ test('usableMeta accepts only known, well-formed fields; a photo with bad metada
   assert.equal(usableMeta({ camera: 'x'.repeat(81) }), false)
   assert.equal(usableMeta(null), false)
   assert.deepEqual(foldAlbum({ root: ROOT, id: ID }, [album(ROOT, 1, 't'), photo('200', 1, 'b', { meta: { gps: 'here' } })]).photos, [])
+})
+
+// ---------------------------------------------------------------- members
+const BOB = '0x00000000000000000000000000000000000000b0'
+const EVE = '0x00000000000000000000000000000000000000e0'
+const KEY = 'k'.repeat(43)
+const join = (src, pieceId, wallet, extra = {}) => ({ ...base, type: 'join', ds: src, wallet, enc: KEY, walletOk: true, src, pieceId: String(pieceId), ...extra })
+const keys = (pieceId, epoch, entries, revoke, src = ROOT) => ({ ...base, type: 'keys', epoch, entries: entries.map((to) => ({ to, epk: KEY, box: 'Ym94' })), ...(revoke ? { revoke } : {}), src, pieceId: String(pieceId) })
+
+test('a join is a request until the owner grants it; a grant makes a member whose data set counts', () => {
+  const asked = foldMembers({ root: ROOT, id: ID }, [join('200', 1, BOB)])
+  assert.deepEqual(asked.requests, [{ wallet: BOB, enc: KEY, src: '200' }])
+  assert.deepEqual([...asked.memberSrcs], [ROOT])
+  const granted = foldMembers({ root: ROOT, id: ID }, [join('200', 1, BOB), keys(2, 0, [BOB])])
+  assert.deepEqual(granted.members, [BOB])
+  assert.deepEqual(granted.requests, [])
+  assert.deepEqual([...granted.memberSrcs].sort(), [ROOT, '200'])
+  assert.equal(granted.grants.get(BOB).epoch, 0)
+})
+
+test('removal moves the epoch on, drops the member\'s data set, and a later grant brings them back', () => {
+  const removed = foldMembers({ root: ROOT, id: ID }, [join('200', 1, BOB), keys(2, 0, [BOB]), keys(3, 1, [], [BOB])])
+  assert.equal(removed.epoch, 1)
+  assert.deepEqual(removed.members, [])
+  assert.deepEqual(removed.removed, [BOB])
+  assert.equal(removed.grants.has(BOB), false)
+  assert.deepEqual([...removed.memberSrcs], [ROOT])
+  assert.deepEqual(removed.requests, []) // an old join is not a new request
+  const back = foldMembers({ root: ROOT, id: ID }, [join('200', 1, BOB), keys(2, 0, [BOB]), keys(3, 1, [], [BOB]), keys(4, 1, [BOB])])
+  assert.deepEqual(back.members, [BOB])
+})
+
+test('keys pieces count only in root, only in piece id order, and never move the epoch back', () => {
+  const s = foldMembers({ root: ROOT, id: ID }, [
+    join('200', 1, BOB), join('300', 1, EVE),
+    keys(5, 2, [BOB]),
+    keys(9, 1, [EVE]), // later piece, older epoch: ignored
+    keys(1, 0, [EVE], undefined, '300'), // not in root: ignored
+  ])
+  assert.equal(s.epoch, 2)
+  assert.deepEqual(s.members, [BOB])
+})
+
+test('a join counts only if the wallet signed it and it names the data set it sits in', () => {
+  const s = foldMembers({ root: ROOT, id: ID }, [
+    join('200', 1, BOB, { walletOk: false }),
+    join('300', 1, EVE, { ds: '200' }), // copied from another data set
+  ])
+  assert.deepEqual(s.requests, [])
+})
+
+test('a copy of a member\'s join does not make a removed member\'s data set count', () => {
+  const s = foldMembers({ root: ROOT, id: ID }, [
+    join('200', 1, BOB), keys(2, 0, [BOB]),
+    join('666', 1, BOB, { ds: '200' }), // Eve's data set, Bob's join copied in
+  ])
+  assert.deepEqual([...s.memberSrcs].sort(), [ROOT, '200'])
+})
+
+test('in a members-only album only the owner\'s and members\' data sets count', () => {
+  const pieces = [album(ROOT, 1, 't'), photo(ROOT, 2, 'owner'), photo('200', 3, 'bob'), photo('300', 4, 'eve')]
+  const s = foldAlbum({ root: ROOT, id: ID }, pieces, { onlySrcs: new Set([ROOT, '200']) })
+  assert.deepEqual(s.photos.map((p) => p.src), [ROOT, '200'])
 })

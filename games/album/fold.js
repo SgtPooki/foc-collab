@@ -23,6 +23,12 @@
  * token. An author is (src, token). A photo is removed by its author or
  * by the album's owner (any identity writing in root).
  *
+ * Access. A link album seals everything under one album key that anyone
+ * with the key holds. A members-only album seals under per-epoch keys that
+ * only approved members receive; foldMembers below reads who they are
+ * from public pieces, and foldAlbum then counts photos only from the
+ * owner's data set and current members' data sets (`onlySrcs`).
+ *
  * Order. Inside one data set piece id is exact; across data sets the fold
  * makes no claim. Photos come out grouped by data set (numerically) and in
  * piece id order within each; the page reorders them for display by block
@@ -63,8 +69,8 @@ export function usablePhoto(p, id) {
  * The album as the page shows it:
  *   { exists, title, photos: [{ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }], ignored }
  */
-export function foldAlbum({ root, id }, pieces) {
-  const mine = pieces.filter((p) => p != null && p.app === APP && p.v === 2 && p.album === id)
+export function foldAlbum({ root, id }, pieces, { onlySrcs = null } = {}) {
+  const mine = pieces.filter((p) => p != null && p.app === APP && p.v === 2 && p.album === id && (onlySrcs == null || onlySrcs.has(p.src)))
   const creation = mine.filter((p) => p.type === 'album' && p.src === String(root) && isText(p.title, MAX_TITLE)).sort(byPieceId)[0]
   const photos = mine.filter((p) => usablePhoto(p, id))
   const removals = mine.filter((p) => p.type === 'remove' && typeof p.target === 'string')
@@ -84,4 +90,73 @@ export function foldAlbum({ root, id }, pieces) {
     .map(({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }) => ({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }))
   const counted = (creation == null ? 0 : 1) + photos.length + removals.length
   return { exists: creation != null, title: creation?.title ?? null, photos: kept, ignored: mine.length - counted }
+}
+
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/
+const B64U_KEY = /^[A-Za-z0-9_-]{43}$/ // a 32-byte key, base64url
+const B64U = /^[A-Za-z0-9_-]+$/
+
+/**
+ * Membership of a members-only album, from its public pieces. Pure.
+ *
+ *   { type: 'join', album, ds, wallet, enc, walletSig }   any data set
+ *       a wallet asks to join and publishes its X25519 key (`enc`). The
+ *       wallet signs the body (wallet-sig.js, annotated walletOk) and it
+ *       must name the data set it sits in (`ds` = src), so a copy of
+ *       someone's join in another data set counts for nothing.
+ *   { type: 'keys', album, epoch, revoke?: [wallet], entries: [{ to, epk, box }] }
+ *       root only, applied in piece id order (the one order the fold
+ *       trusts); `revoke` removes wallets, each entry grants its `to`
+ *       wallet the keyring for epochs 0..epoch. Epochs never go back.
+ *
+ * Returns { epoch, members, removed, requests, grants, memberSrcs }:
+ *   epoch       the current membership epoch
+ *   members     wallets (lowercase) granted and not removed since
+ *   removed     wallets removed and not granted since
+ *   requests    [{ wallet, enc, src }] joins by wallets never granted or removed
+ *   grants      Map wallet -> { epoch, epk, box }: each member's latest grant
+ *   memberSrcs  Set of data sets whose photos count: root and members' joins
+ */
+export function foldMembers({ root, id }, pieces) {
+  const mine = pieces.filter((p) => p != null && p.app === APP && p.v === 2 && p.album === id)
+  const keyPieces = mine
+    .filter((p) => p.type === 'keys' && p.src === String(root) && usableKeys(p))
+    .sort(byPieceId)
+  const status = new Map() // wallet -> 'member' | 'removed'
+  const grants = new Map()
+  let epoch = 0
+  for (const k of keyPieces) {
+    if (k.epoch < epoch) continue
+    epoch = k.epoch
+    for (const w of k.revoke ?? []) {
+      status.set(w.toLowerCase(), 'removed')
+      grants.delete(w.toLowerCase())
+    }
+    for (const e of k.entries) {
+      status.set(e.to.toLowerCase(), 'member')
+      grants.set(e.to.toLowerCase(), { epoch: k.epoch, epk: e.epk, box: e.box })
+    }
+  }
+  const joins = mine
+    .filter((p) => p.type === 'join' && p.walletOk === true && ADDRESS.test(p.wallet ?? '') && B64U_KEY.test(p.enc ?? '') && p.ds === p.src)
+    .sort((a, b) => Number(a.src) - Number(b.src) || byPieceId(a, b))
+  const memberSrcs = new Set([String(root)])
+  const requests = []
+  const asked = new Set()
+  for (const j of joins) {
+    const w = j.wallet.toLowerCase()
+    if (status.get(w) === 'member') memberSrcs.add(j.src)
+    if (!status.has(w) && !asked.has(w)) {
+      asked.add(w)
+      requests.push({ wallet: w, enc: j.enc, src: j.src })
+    }
+  }
+  const walletsWith = (s) => [...status].filter(([, v]) => v === s).map(([w]) => w)
+  return { epoch, members: walletsWith('member'), removed: walletsWith('removed'), requests, grants, memberSrcs }
+}
+
+function usableKeys(p) {
+  if (!Number.isInteger(p.epoch) || p.epoch < 0 || !Array.isArray(p.entries)) return false
+  if (p.revoke !== undefined && !(Array.isArray(p.revoke) && p.revoke.every((w) => ADDRESS.test(w ?? '')))) return false
+  return p.entries.every((e) => ADDRESS.test(e?.to ?? '') && B64U_KEY.test(e.epk ?? '') && B64U.test(e.box ?? ''))
 }
