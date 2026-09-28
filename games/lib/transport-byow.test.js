@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { fetchBounded, needsFetch, OWN, OversizedPiece, SPONSORED, toPiece, upload } from './transport-byow.js'
+import { expiredWriter, fetchBounded, needsFetch, OWN, OversizedPiece, SPONSORED, toPiece, upload } from './transport-byow.js'
 
 // fetch answers `/len?n=` with a content-length and `/stream?n=` without one.
 const realFetch = globalThis.fetch
@@ -76,4 +76,12 @@ test('upload resolves with the PieceCID once AddPieces is submitted, and passes 
 test('upload rejects when the storage context fails before AddPieces', async () => {
   const ctx = { upload: () => Promise.reject(new Error('provider down')) }
   await assert.rejects(upload(ctx, new Uint8Array(1), null, {}, SPONSORED), /provider down/)
+})
+
+test('an expired session key gives a writer that reports its expiry and refuses to write, instead of failing boot', async () => {
+  const expiry = Date.parse('2026-09-18T15:43:55Z')
+  const w = expiredWriter(expiry)
+  assert.equal(w.writeExpiry, expiry)
+  await assert.rejects(w.append({ v: 2 }), /session key expired 2026-09-18T15:43:55.000Z: reconnect your wallet/)
+  await assert.rejects(w.appendBlob(new Uint8Array(1)), /reconnect your wallet/)
 })

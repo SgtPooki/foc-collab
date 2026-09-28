@@ -177,6 +177,14 @@ async function openReader(client, ds) {
   }
 }
 
+/** A writer whose session key has expired: it reports when, and refuses to write. */
+export function expiredWriter(writeExpiry) {
+  const refuse = async () => {
+    throw new Error(`your session key expired ${new Date(writeExpiry).toISOString()}: reconnect your wallet to write`)
+  }
+  return { writeExpiry, append: refuse, appendBlob: refuse }
+}
+
 /** Writer for the caller's own data set, signing AddPieces with the session key. */
 async function openWriter(transport, me, source) {
   const dataSetId = Number(me.ds)
@@ -187,6 +195,10 @@ async function openWriter(transport, me, source) {
     createPublicClient({ chain: calibration, transport }),
     { address: me.wallet, sessionKeyAddress: sessionKey.account.address, permissions: [AddPiecesPermission] },
   )
+  const writeExpiry = Number(expirations[AddPiecesPermission] ?? 0n) * 1000
+  // Synapse.create throws for an expired key. Come back read-only instead,
+  // so the page still boots and boot-byow.js can offer to reconnect.
+  if (writeExpiry <= Date.now()) return expiredWriter(writeExpiry)
   const synapse = Synapse.create({
     account: me.wallet,
     chain: calibration,
@@ -197,7 +209,7 @@ async function openWriter(transport, me, source) {
   })
   const ctx = await synapse.storage.createContext({ dataSetId })
   return {
-    writeExpiry: Number(expirations[AddPiecesPermission] ?? 0n) * 1000,
+    writeExpiry,
     append: (piece, onProgress, tags) => upload(ctx, encodePiece(piece), onProgress, tags, OWN),
     appendBlob: (bytes, onProgress, tags) => upload(ctx, bytes, onProgress, tags, OWN),
   }
