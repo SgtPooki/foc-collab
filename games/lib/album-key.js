@@ -146,9 +146,19 @@ export async function albumTag(ak) {
   return hex(new Uint8Array(await crypto.subtle.sign('HMAC', key, enc('foc-collab/album-tag/v1')))).slice(0, 32)
 }
 
-/** An EIP-1193 provider as a `sign` function for `address`. */
+/**
+ * An EIP-1193 provider as a `sign` function for `address`. Before the first
+ * prompt it asks the wallet's chain for code at the address: a contract
+ * account (Safe, smart wallets, ERC-4337) signs through ERC-1271, whose
+ * signatures are not stable, so it cannot hold a derived key.
+ */
 export function providerSigner(provider, address) {
-  return (typedData) => {
+  let eoa = null
+  return async (typedData) => {
+    eoa ??= provider.request({ method: 'eth_getCode', params: [address, 'latest'] }).then((code) => {
+      if (code != null && code !== '0x') throw new Error('this is a smart-contract wallet; album keys need a regular (EOA) wallet, because contract signatures are not reproducible')
+    })
+    await eoa
     const payload = { ...typedData, types: { EIP712Domain: DOMAIN_TYPES, ...typedData.types } }
     return provider.request({ method: 'eth_signTypedData_v4', params: [address, JSON.stringify(payload)] })
   }

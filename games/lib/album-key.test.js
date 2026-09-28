@@ -87,8 +87,13 @@ test('the album tag is stable per album key and differs across albums', async ()
 })
 
 test('providerSigner sends eth_signTypedData_v4 JSON that signs the same as viem does directly', async () => {
+  let codeChecks = 0
   const provider = {
     async request({ method, params }) {
+      if (method === 'eth_getCode') {
+        codeChecks++
+        return '0x'
+      }
       assert.equal(method, 'eth_signTypedData_v4')
       assert.equal(params[0], owner.address)
       const typed = JSON.parse(params[1])
@@ -98,10 +103,24 @@ test('providerSigner sends eth_signTypedData_v4 JSON that signs the same as viem
   }
   const { ak, lock } = await newAlbumKey(providerSigner(provider, owner.address))
   assert.deepEqual(await openAlbumKey(signer(owner), lock), ak)
+  assert.equal(codeChecks, 1) // two signatures, one EOA check
 })
 
 test('the access key round-trips as text and rejects anything else', () => {
   const ak = crypto.getRandomValues(new Uint8Array(32))
   assert.deepEqual(accessKeyFromText(` ${accessKeyText(ak)}\n`), ak)
   assert.throws(() => accessKeyFromText('short'), /not an album access key/)
+})
+
+test('providerSigner refuses a contract account before any signature prompt', async () => {
+  const requests = []
+  const contract = {
+    async request({ method }) {
+      requests.push(method)
+      if (method === 'eth_getCode') return '0x6080604052'
+      throw new Error(`unexpected ${method}`)
+    },
+  }
+  await assert.rejects(newAlbumKey(providerSigner(contract, owner.address)), /smart-contract wallet/)
+  assert.deepEqual(requests, ['eth_getCode'])
 })
