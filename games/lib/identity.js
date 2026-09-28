@@ -70,7 +70,7 @@ export async function generateIdentity() {
 const DB = 'ttt-identity'
 const STORE = 'keys'
 
-function idbRequest(request) {
+export function idbRequest(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)

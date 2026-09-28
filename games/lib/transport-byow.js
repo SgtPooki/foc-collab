@@ -19,6 +19,7 @@
  *     me?:       { ds, wallet, sessionKey }   omit for a read-only spectator
  *     peers?:    [ds, ...]                    data sets to read from the start
  *     storage?:  { get(key), set(key, value) } cache; localStorage in browsers
+ *     bodyStore?: piece body cache (piece-cache.js); IndexedDB by default
  *     maxPieceBytes?: largest JSON piece list() will buffer (default 8 KiB);
  *                an app whose pieces carry sealed thumbnails raises it
  *     logRpcs?:  [url, ...]  RPCs for eth_getLogs scans, tried in order. The
@@ -36,6 +37,7 @@ import {
 } from './foc-deps.js'
 import { scan, TAG_APP, TAG_GAME, TAG_TYPE } from './discover.js'
 import { homeLog } from './byow-engine.js'
+import { cachedFetch, idbBodyStore } from './piece-cache.js'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 const MAX_PIECE_BYTES = 8192 // a game piece is ~300 bytes; refuse griefer blobs before buffering
@@ -247,10 +249,11 @@ export async function createByowTransport(config = {}) {
   const sponsored = config.sponsored?.ds != null && config.sponsored?.payer != null ? config.sponsored : null
   if (sponsored != null) known.add(String(sponsored.ds))
 
-  // Immutable bodies cached by CID, and per data set the ids we have ever
-  // seen (id -> cid) so a piece that later disappears from the active list
-  // is detected instead of silently rewinding the game.
-  const CACHE_KEY = 'ttt:byow:bodies'
+  // Immutable bodies cached by CID (IndexedDB, see piece-cache.js), and per
+  // data set the ids we have ever seen (id -> cid) so a piece that later
+  // disappears from the active list is detected instead of silently
+  // rewinding the game.
+  const LEGACY_BODIES_KEY = 'ttt:byow:bodies' // bodies lived here before IndexedDB
   const SEEN_KEY = 'ttt:byow:seen'
   const SCAN_KEY = 'ttt:byow:scan'
   const load = (key) => {
@@ -260,7 +263,14 @@ export async function createByowTransport(config = {}) {
       return {}
     }
   }
-  const bodies = new Map(Object.entries(load(CACHE_KEY)))
+  const bodyStore = config.bodyStore ?? idbBodyStore()
+  const bodies = await bodyStore.all()
+  const remember = (cid, body) => {
+    bodies.set(cid, body)
+    bodyStore.put(cid, body).catch(() => {}) // a lost write costs one refetch
+  }
+  // Free the old localStorage copy: it is what filled the quota. It refills from providers.
+  if ((storage.get(LEGACY_BODIES_KEY) ?? '{}') !== '{}') storage.set(LEGACY_BODIES_KEY, '{}')
   const seen = load(SEEN_KEY) // { [ds]: { [pieceId]: cid } }
   const scans = load(SCAN_KEY) // { [scope]: { scanned: block, hints: [...] } }
   let persistQueued = false
@@ -269,7 +279,6 @@ export async function createByowTransport(config = {}) {
     persistQueued = true
     setTimeout(() => {
       persistQueued = false
-      storage.set(CACHE_KEY, JSON.stringify(Object.fromEntries(bodies)))
       storage.set(SEEN_KEY, JSON.stringify(seen))
       storage.set(SCAN_KEY, JSON.stringify(scans))
     }, 250)
@@ -377,9 +386,9 @@ export async function createByowTransport(config = {}) {
     for (let i = 0; i < missing.length; i += BATCH) {
       await Promise.all(missing.slice(i, i + BATCH).map(async ({ cid }) => {
         try {
-          bodies.set(cid, JSON.parse(new TextDecoder().decode(await fetchBounded(r.pieceUrl(cid), maxPieceBytes))))
+          remember(cid, JSON.parse(new TextDecoder().decode(await fetchBounded(r.pieceUrl(cid), maxPieceBytes))))
         } catch (err) {
-          bodies.set(cid, err instanceof OversizedPiece ? maxPieceBytes : null) // see needsFetch
+          remember(cid, err instanceof OversizedPiece ? maxPieceBytes : null) // see needsFetch
         }
       }))
     }
@@ -436,10 +445,10 @@ export async function createByowTransport(config = {}) {
       if (writer == null) throw new Error('read-only: no wallet and session key configured')
       return writer.appendBlob(bytes, onProgress, tags)
     },
-    /** A piece's raw bytes from the provider of data set `ds`, refusing more than maxBytes (required). */
+    /** A piece's raw bytes from the provider of data set `ds` (Cache API first), refusing more than maxBytes (required). */
     async fetchBlob(ds, cid, maxBytes) {
       if (!(maxBytes > 0)) throw new Error('fetchBlob needs maxBytes: the default cap is sized for JSON pieces')
-      return fetchBounded((await reader(String(ds))).pieceUrl(cid), maxBytes)
+      return cachedFetch((await reader(String(ds))).pieceUrl(cid), (url) => fetchBounded(url, maxBytes))
     },
     /** The sponsored data set this page may write to as a guest, or null. */
     sponsored: sponsored == null ? null : { ds: String(sponsored.ds), payer: sponsored.payer, authorizer: sponsored.authorizer ?? null, log: homeLog(sponsored.ds) },
