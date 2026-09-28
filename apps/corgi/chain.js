@@ -19,7 +19,7 @@
  *     carries the feeder's address as `from`.
  */
 import * as sdk from './deps.js' // build.mjs rewrites this to the bundled vendor.js
-import { LOG_RPC_TIMEOUT_MS, logRpc, REORG_MARGIN, tokenLogs } from '../../games/lib/chain-logs.js'
+import { LOG_RPC_TIMEOUT_MS, LOG_RPCS, logClient, REORG_MARGIN, tokenLogs } from '../../games/lib/chain-logs.js'
 
 export const CHAINS = { calibration: sdk.calibration, mainnet: sdk.mainnet }
 export const EPOCH_SECONDS = 30
@@ -38,12 +38,19 @@ export function chainOf(name) {
   return chain
 }
 
-/**
- * A read client for `chain`, on the shared log RPC (games/lib/chain-logs.js
- * says which and why); `rpcUrl` (page config) overrides it.
- */
+/** A read client for `chain` (the SDK default RPC unless the page config sets `rpcUrl`). */
 export function publicClient(chain, rpcUrl) {
-  return sdk.createPublicClient({ chain, transport: sdk.http(rpcUrl ?? logRpc(chain.id), { timeout: LOG_RPC_TIMEOUT_MS }) })
+  return sdk.createPublicClient({ chain, transport: sdk.http(rpcUrl, { timeout: LOG_RPC_TIMEOUT_MS }) })
+}
+
+/**
+ * The client deposit history is read with: every RPC in the shared list for
+ * `chain` (games/lib/chain-logs.js says why one is not enough), or just
+ * `rpcUrl` when the page config pins one.
+ */
+export function historyClient(chain, rpcUrl) {
+  const urls = rpcUrl != null ? [rpcUrl] : LOG_RPCS[chain.id] ?? [undefined]
+  return logClient(urls.map((url) => sdk.createPublicClient({ chain, transport: sdk.http(url, { timeout: LOG_RPC_TIMEOUT_MS, retryCount: 0 }) })))
 }
 
 export function tokenOf(chain, token) {
@@ -188,7 +195,7 @@ export async function readCorgi(client, config, opts = {}) {
   const payer = config.payer
   const [account, log, clock] = await Promise.all([
     readAccount(client, { payer, token }),
-    readDeposits(client, { chain, payer, token, fromBlock: Number(config.fromBlock ?? 0) }, opts),
+    readDeposits(opts.historyClient ?? historyClient(chain, config.rpcUrl), { chain, payer, token, fromBlock: Number(config.fromBlock ?? 0) }, opts),
     epochClock(client),
   ])
   return { payer, account, deposits: log.deposits, withdrawals: log.withdrawals, head: log.head, clock, token }

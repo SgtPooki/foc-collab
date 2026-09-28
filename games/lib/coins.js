@@ -14,7 +14,7 @@
 import {
   approve, balance, calibration, createPublicClient, createWalletClient, custom, deposit, http, parseAbiItem, parseEventLogs,
 } from './foc-deps.js'
-import { LOG_RPC_TIMEOUT_MS, logRpc, REORG_MARGIN, tokenLogs } from './chain-logs.js'
+import { LOG_RPC_TIMEOUT_MS, LOG_RPCS, logClient, REORG_MARGIN, tokenLogs } from './chain-logs.js'
 
 export const DEPOSIT_EVENT = parseAbiItem(
   'event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
@@ -64,7 +64,7 @@ export async function readCoins(client, { payer, fromBlock, token = calibration.
 
 /** A public client on calibration for reading the till (see chain-logs.js). */
 export function coinClient() {
-  return createPublicClient({ chain: calibration, transport: http(logRpc(calibration.id), { timeout: LOG_RPC_TIMEOUT_MS }) })
+  return logClient(LOG_RPCS[calibration.id].map((url) => createPublicClient({ chain: calibration, transport: http(url, { timeout: LOG_RPC_TIMEOUT_MS, retryCount: 0 }) })))
 }
 
 /**

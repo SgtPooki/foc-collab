@@ -39,7 +39,7 @@ import {
 import { scan, TAG_APP, TAG_GAME, TAG_TYPE } from './discover.js'
 import { homeLog } from './byow-engine.js'
 import { cachedFetch, idbBodyStore } from './piece-cache.js'
-import { LOG_RPCS } from './chain-logs.js'
+import { LOG_RPCS, logClient } from './chain-logs.js'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 const MAX_PIECE_BYTES = 8192 // a game piece is ~300 bytes; refuse griefer blobs before buffering
@@ -309,19 +309,9 @@ export async function createByowTransport(config = {}) {
 
   // PieceAdded(dataSetId indexed, pieceId indexed, pieceCid, keys, values)
   const pieceAdded = calibration.contracts.fwss.abi.find((e) => e.type === 'event' && e.name === 'PieceAdded')
-  const logClients = (config.logRpcs ?? LOG_RPCS[calibration.id])
-    .map((url) => createPublicClient({ chain: calibration, transport: http(url, { retryCount: 0 }) }))
-  async function fetchLogs(fromBlock, toBlock) {
-    let lastError
-    for (const c of logClients) {
-      try {
-        return await c.getLogs({ address: calibration.contracts.fwss.address, event: pieceAdded, fromBlock, toBlock })
-      } catch (err) {
-        lastError = err
-      }
-    }
-    throw lastError
-  }
+  const logs = logClient((config.logRpcs ?? LOG_RPCS[calibration.id])
+    .map((url) => createPublicClient({ chain: calibration, transport: http(url, { retryCount: 0 }) })))
+  const fetchLogs = (fromBlock, toBlock) => logs.getLogs({ address: calibration.contracts.fwss.address, event: pieceAdded, fromBlock, toBlock })
   const DISCOVER_CHUNK = BigInt(config.discoverChunk ?? 2000)
   const LOBBY_BLOCKS = BigInt(config.lobbyBlocks ?? 4000) // ~33h of calibration history
 
