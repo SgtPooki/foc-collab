@@ -6,7 +6,7 @@
  * so the demo cannot be taken down by a CDN outage or a floating version.
  * In node (proof scripts, tests) the same module resolves straight from
  * node_modules. The FEE envelope library (vendor/foc-encryption, see
- * seal.js) rides in the same bundle.
+ * seal.js) and X25519 ride in the same bundle.
  */
 export { calibration } from '@filoz/synapse-core/chains'
 export { getActivePiecesByCursor } from '@filoz/synapse-core/pdp-verifier'
@@ -19,3 +19,5 @@ export { approve, balance } from '@filoz/synapse-core/erc20'
 export { createPublicClient, createWalletClient, custom, formatUnits, http, parseAbiItem, parseEventLogs, parseUnits, publicActions, verifyMessage } from 'viem'
 export { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 export { decrypt as feeDecrypt, encrypt as feeEncrypt, parseEnvelope as feeParse } from '../../vendor/foc-encryption/index.js'
+export { x25519 } from '@noble/curves/ed25519'
+export { secp256k1 } from '@noble/curves/secp256k1'
