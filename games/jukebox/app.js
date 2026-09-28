@@ -142,7 +142,26 @@ export async function mountJukebox() {
     return `you have ${myCredits()} credit${myCredits() === 1 ? '' : 's'}: pick a song`
   }
 
+  // The coin animation: shown while a coin is going in; it waits at the slot
+  // while the wallet asks for a signature and rolls once the transaction is
+  // on its way. Reduced motion keeps it still.
+  const coinRun = $('coin-run')
+  const coinSvg = coinRun.querySelector('svg')
+  const stillMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  let coinStage = null
+  function renderCoinRun() {
+    coinRun.hidden = busy !== 'inserting a coin'
+    if (coinRun.hidden) return
+    if (stillMotion || coinStage == null || coinStage.endsWith(':sign')) {
+      coinSvg.pauseAnimations()
+      coinSvg.setCurrentTime(0)
+    } else {
+      coinSvg.unpauseAnimations()
+    }
+  }
+
   function render() {
+    renderCoinRun()
     $('coin-connect').hidden = provider == null || address != null
     $('coin').disabled = provider == null || address == null || busy != null
     $('wallet').textContent = address == null ? '' : `wallet ${short(address)}, ${myCredits()} credit${myCredits() === 1 ? '' : 's'}`
@@ -212,17 +231,20 @@ export async function mountJukebox() {
       await insertCoin({
         provider, address, payer, amount: PRICE,
         onStage: (stage) => {
+          coinStage = stage
           busyStage = { 'approve:sign': 'approve USDFC in your wallet', 'approve:pending': 'approval on its way', 'deposit:sign': 'confirm the deposit in your wallet', 'deposit:pending': 'coin on its way', done: 'coin landed' }[stage] ?? stage
           render()
         },
       })
       busy = null
       busyStage = null
+      coinStage = null
       await refresh()
     } catch (err) {
       console.error(err)
       busy = null
       busyStage = null
+      coinStage = null
       lastError = `coin failed (${err?.shortMessage ?? err?.message?.slice(0, 120) ?? err})`
       render()
     }
