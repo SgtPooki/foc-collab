@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { APP, foldAlbum, usablePhoto } from './fold.js'
+import { APP, foldAlbum, usableMeta, usablePhoto } from './fold.js'
 
 const ROOT = '100'
 const ID = 'a1b2c3d4'
@@ -65,4 +65,23 @@ test('usablePhoto requires a PieceCID, a base64url thumbnail, and positive integ
   assert.equal(usablePhoto(photo('200', 1, 'b'), ID), true)
   assert.equal(usablePhoto(photo('200', 1, 'b', { h: 2.5 }), ID), false)
   assert.equal(usablePhoto(photo('200', 1, 'b', { thumb: 'x'.repeat(96 * 1024 + 1) }), ID), false)
+})
+
+test('kept metadata rides along with its photo', () => {
+  const meta = { taken: '2026-09-28 14:05:09', camera: 'Apple iPhone 15', gps: { lat: 40.741667, lon: -73.993333 } }
+  const [p] = foldAlbum({ root: ROOT, id: ID }, [album(ROOT, 1, 't'), photo('200', 1, 'b', { meta })]).photos
+  assert.deepEqual(p.meta, meta)
+})
+
+test('usableMeta accepts only known, well-formed fields; a photo with bad metadata is left out', () => {
+  assert.equal(usableMeta(undefined), true)
+  assert.equal(usableMeta({}), true)
+  assert.equal(usableMeta({ lens: 'x' }), true)
+  assert.equal(usableMeta({ serial: '123' }), false) // unknown field
+  assert.equal(usableMeta({ taken: '2026:09:28 14:05:09' }), false) // raw EXIF format, not normalized
+  assert.equal(usableMeta({ gps: { lat: 91, lon: 0 } }), false)
+  assert.equal(usableMeta({ gps: { lat: 1, lon: 2, alt: 3 } }), false)
+  assert.equal(usableMeta({ camera: 'x'.repeat(81) }), false)
+  assert.equal(usableMeta(null), false)
+  assert.deepEqual(foldAlbum({ root: ROOT, id: ID }, [album(ROOT, 1, 't'), photo('200', 1, 'b', { meta: { gps: 'here' } })]).photos, [])
 })

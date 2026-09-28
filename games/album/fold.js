@@ -11,9 +11,12 @@
  *
  * Piece shapes (schema v2, app 'foc-album', signed inside the sealed box):
  *   { type: 'album', album, title }                  counts only in root; lowest piece id wins
- *   { type: 'photo', album, blob, thumb, w, h, caption? }
+ *   { type: 'photo', album, blob, thumb, w, h, caption?, meta? }
  *       blob: PieceCID of the sealed full-size photo (fetched on demand)
  *       thumb: base64url JPEG, small enough to ride in the log piece
+ *       meta: the EXIF fields its contributor chose to keep (exif.js):
+ *             { taken?, camera?, lens?, gps?: { lat, lon } }; the image
+ *             bytes themselves carry none (re-encoded through a canvas)
  *   { type: 'remove', album, target }                target = a photo's ref
  *
  * Annotations expected from outside the signed body: src, pieceId, ref,
@@ -31,6 +34,20 @@ const MAX_CAPTION = 200
 const MAX_THUMB = 96 * 1024 // base64url characters; a 320px JPEG is ~20 KB
 
 const isText = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max
+const META_KEYS = ['taken', 'camera', 'lens', 'gps']
+
+/** A photo's kept metadata: absent, or only known fields, each well formed. */
+export function usableMeta(meta) {
+  if (meta === undefined) return true
+  if (meta == null || typeof meta !== 'object' || Array.isArray(meta)) return false
+  if (Object.keys(meta).some((k) => !META_KEYS.includes(k))) return false
+  if (meta.taken !== undefined && !(typeof meta.taken === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(meta.taken))) return false
+  if (meta.camera !== undefined && !isText(meta.camera, 80)) return false
+  if (meta.lens !== undefined && !isText(meta.lens, 80)) return false
+  if (meta.gps === undefined) return true
+  const { lat, lon } = meta.gps ?? {}
+  return Object.keys(meta.gps ?? {}).length === 2 && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+}
 const byPieceId = (a, b) => Number(a.pieceId) - Number(b.pieceId)
 
 export function usablePhoto(p, id) {
@@ -38,12 +55,13 @@ export function usablePhoto(p, id) {
   if (!isText(p.blob, 200) || !/^baf[a-z0-9]+$/.test(p.blob)) return false
   if (!isText(p.thumb, MAX_THUMB) || !/^[A-Za-z0-9_-]+$/.test(p.thumb)) return false
   if (!Number.isInteger(p.w) || !Number.isInteger(p.h) || p.w <= 0 || p.h <= 0) return false
-  return p.caption === undefined || isText(p.caption, MAX_CAPTION)
+  if (p.caption !== undefined && !isText(p.caption, MAX_CAPTION)) return false
+  return usableMeta(p.meta)
 }
 
 /**
  * The album as the page shows it:
- *   { exists, title, photos: [{ ref, src, pieceId, token, blob, thumb, w, h, caption }], ignored }
+ *   { exists, title, photos: [{ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }], ignored }
  */
 export function foldAlbum({ root, id }, pieces) {
   const mine = pieces.filter((p) => p != null && p.app === APP && p.v === 2 && p.album === id)
@@ -63,7 +81,7 @@ export function foldAlbum({ root, id }, pieces) {
   const kept = photos
     .filter((p) => !removed.has(p.ref))
     .sort((a, b) => Number(a.src) - Number(b.src) || byPieceId(a, b))
-    .map(({ ref, src, pieceId, token, blob, thumb, w, h, caption }) => ({ ref, src, pieceId, token, blob, thumb, w, h, caption }))
+    .map(({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }) => ({ ref, src, pieceId, token, blob, thumb, w, h, caption, meta }))
   const counted = (creation == null ? 0 : 1) + photos.length + removals.length
   return { exists: creation != null, title: creation?.title ?? null, photos: kept, ignored: mine.length - counted }
 }
