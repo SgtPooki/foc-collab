@@ -145,6 +145,7 @@ export async function mountAlbum() {
     mountHome()
     return
   }
+  $('albums-nav').hidden = false
 
   const albumName = `${target.root}.${target.id}`
   let ak = null
@@ -466,6 +467,7 @@ export async function mountAlbum() {
     const thumbs = new Map() // ref -> object URL
     let state = { exists: false, title: null, photos: [], ignored: 0 }
     let pending = 0 // photos uploaded but not yet folded in
+    let listed = false // whether this visit has put the album on the albums home
 
     async function openPiece(p) {
       const key = `${p.src}:${p.pieceId}`
@@ -513,6 +515,10 @@ export async function mountAlbum() {
       const title = state.title ?? (state.exists ? 'album' : 'album (not found yet)')
       $('heading').textContent = title
       document.title = `${title}: shared album`
+      if (state.title != null && !listed) { // list it on the albums home under its title, most recent first
+        listed = true
+        rememberAlbum({ album: albumName, from: fromBlock, title: state.title })
+      }
       const ordered = [...state.photos].sort((a, b) => blockOf(b) - blockOf(a)) // newest first
       $('grid').replaceChildren(...ordered.map((photo) => {
         const b = document.createElement('button')
