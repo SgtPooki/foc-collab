@@ -98,6 +98,9 @@ the only order the fold trusts is piece id inside one data set.
 - `games/lib/wallet-sig.js`: a wallet's EIP-191 signature over a piece
   body (`signWithWallet`, `annotateWalletSigs`), verified before the fold
   like piece signatures; how a pick proves which wallet paid
+- `games/lib/seal.js`: the encryption seam (FEE envelopes, A256KW to a
+  kek), backed by the vendored `vendor/foc-encryption` until
+  `@filoz/filecoin-encryption-envelope` ships AEAD; swap it there only
 - `games/lib/piece-cache.js`: durable piece caches: parsed bodies in
   IndexedDB (one record per CID; they used to fill localStorage's quota)
   and raw blobs in the Cache API; both fall back to memory
