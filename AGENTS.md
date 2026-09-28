@@ -93,8 +93,14 @@ the only order the fold trusts is piece id inside one data set.
   each game's folds from the built game directories)
 - `games/lib/coins.js`: Filecoin Pay deposits as coins: read
   `DepositRecorded` for a payer (chunked, checkpointed) and insert one
-  from a wallet (approve, deposit). Used by the jukebox; the corgi has
-  its own copy in `apps/corgi/chain.js`
+  from a wallet (approve, deposit). Used by the jukebox; the corgi reads
+  the same events in `apps/corgi/chain.js`
+- `games/lib/chain-logs.js`: the one place that decides how logs are read
+  from public RPCs: which RPC per chain (filfox on calibration; Glif no
+  longer serves old blocks), chunked `getLogsChunked`, and `tokenLogs`
+  (filfox times out with an indexed token in the filter). coins.js, the
+  transport's discovery, and the corgi (which bundles it from here) all
+  use it: an RPC change is fixed here, once
 - `games/lib/wallet-sig.js`: a wallet's EIP-191 signature over a piece
   body (`signWithWallet`, `annotateWalletSigs`), verified before the fold
   like piece signatures; how a pick proves which wallet paid

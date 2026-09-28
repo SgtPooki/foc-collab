@@ -19,6 +19,7 @@
  *     carries the feeder's address as `from`.
  */
 import * as sdk from './deps.js' // build.mjs rewrites this to the bundled vendor.js
+import { LOG_RPC_TIMEOUT_MS, logRpc, REORG_MARGIN, tokenLogs } from '../../games/lib/chain-logs.js'
 
 export const CHAINS = { calibration: sdk.calibration, mainnet: sdk.mainnet }
 export const EPOCH_SECONDS = 30
@@ -30,21 +31,6 @@ export const WITHDRAW_EVENT = sdk.parseAbiItem(
   'event WithdrawRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
 )
 
-// Glif, the SDK's default calibration RPC, no longer serves this scan: by
-// 2026-09-28 it capped eth_getLogs at 360 blocks and refused blocks older
-// than about 30k, so a corgi born weeks ago could never read its history.
-// filfox answers the whole range (probed 2026-09-28: 74k blocks in 36 s),
-// but times out when the token is in the topic filter, so readDeposits
-// checks the token on the returned logs. Mainnet keeps the SDK default
-// until filfox mainnet is probed the same way.
-const DEFAULT_RPC = { [sdk.calibration.id]: 'https://calibration.filfox.info/rpc/v1' }
-// Stay under an RPC's range cap rather than rely on its error: some
-// backends answer an oversized range with an empty result, which would read
-// as "no deposits" and declare the corgi dead.
-const LOG_CHUNK = 2000
-const MIN_CHUNK = 250 // below this an error is the RPC's, not the range's
-const RPC_TIMEOUT_MS = 60_000 // a 2k-block getLogs regularly takes longer than viem's 10s default
-const REORG_MARGIN = 120 // rescan this many recent blocks on every load
 
 export function chainOf(name) {
   const chain = CHAINS[name]
@@ -52,9 +38,12 @@ export function chainOf(name) {
   return chain
 }
 
-/** A read client for `chain`; `rpcUrl` (page config) overrides the per-chain default above. */
+/**
+ * A read client for `chain`, on the shared log RPC (games/lib/chain-logs.js
+ * says which and why); `rpcUrl` (page config) overrides it.
+ */
 export function publicClient(chain, rpcUrl) {
-  return sdk.createPublicClient({ chain, transport: sdk.http(rpcUrl ?? DEFAULT_RPC[chain.id], { timeout: RPC_TIMEOUT_MS }) })
+  return sdk.createPublicClient({ chain, transport: sdk.http(rpcUrl ?? logRpc(chain.id), { timeout: LOG_RPC_TIMEOUT_MS }) })
 }
 
 export function tokenOf(chain, token) {
@@ -132,25 +121,6 @@ function dedupe(deposits) {
   })
 }
 
-async function getLogsChunked(client, args, from, to, onProgress) {
-  const out = []
-  let span = LOG_CHUNK
-  let cursor = from
-  while (cursor <= to) {
-    const end = cursor + span - 1 < to ? cursor + span - 1 : to
-    try {
-      const logs = await client.getLogs({ ...args, fromBlock: BigInt(cursor), toBlock: BigInt(end) })
-      out.push(...logs)
-      cursor = end + 1
-      onProgress?.({ scanned: cursor - from, total: to - from + 1 })
-    } catch (err) {
-      if (span <= MIN_CHUNK) throw err
-      span = Math.floor(span / 2) // the RPC rejected the range; shrink and retry
-    }
-  }
-  return out
-}
-
 function toEntry(l) {
   return { from: l.args.from, to: l.args.to, amount: l.args.amount, epoch: Number(l.blockNumber), logIndex: Number(l.logIndex), txHash: l.transactionHash }
 }
@@ -175,12 +145,10 @@ export async function readDeposits(client, { chain, payer, token, fromBlock }, {
     onProgress?.({ scanned: progress[0] + progress[1], total: total * 2 })
   }
   const address = chain.contracts.filecoinPay.address
-  // The token is checked here, not in the topic filter (see DEFAULT_RPC).
-  const inToken = (l) => l.args.token.toLowerCase() === token.toLowerCase()
   const [dLogs, wLogs] = await Promise.all([
-    getLogsChunked(client, { address, event: DEPOSIT_EVENT, args: { to: payer } }, start, head, report(0)),
-    getLogsChunked(client, { address, event: WITHDRAW_EVENT, args: { from: payer } }, start, head, report(1)),
-  ]).then((both) => both.map((logs) => logs.filter(inToken)))
+    tokenLogs(client, { address, event: DEPOSIT_EVENT, args: { to: payer } }, token, start, head, report(0)),
+    tokenLogs(client, { address, event: WITHDRAW_EVENT, args: { from: payer } }, token, start, head, report(1)),
+  ])
 
   const deposits = sortDeposits(dedupe([...keepD, ...dLogs.map(toEntry)]))
   const withdrawals = sortDeposits(dedupe([...keepW, ...wLogs.map(toEntry)]))

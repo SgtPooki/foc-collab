@@ -6,51 +6,24 @@
  * key; inserting a coin needs the visitor's wallet and nothing else (no
  * session key, no data set).
  *
- * Reads are chunked under the RPC's eth_getLogs cap and checkpointed in
- * storage so a reload scans only new blocks; a chunk that fails throws,
- * so a partial scan is never cached as the whole history.
+ * Reads go through chain-logs.js (which RPC, chunking, the token rule)
+ * and are checkpointed in storage so a reload scans only new blocks; a
+ * chunk that fails throws, so a partial scan is never cached as the
+ * whole history.
  */
 import {
   approve, balance, calibration, createPublicClient, createWalletClient, custom, deposit, http, parseAbiItem, parseEventLogs,
 } from './foc-deps.js'
+import { LOG_RPC_TIMEOUT_MS, logRpc, REORG_MARGIN, tokenLogs } from './chain-logs.js'
 
 export const DEPOSIT_EVENT = parseAbiItem(
   'event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
 )
-const LOG_CHUNK = 2000
-// The SDK's default Glif endpoint no longer serves this scan: since
-// 2026-09 it caps eth_getLogs at 360 blocks and refuses blocks older than
-// roughly 30k ("outside available upstream range"), so a till whose first
-// coin is weeks old can never be read there. filfox answers the whole
-// range in seconds, but times out whenever the token is in the topic
-// filter, so the token is checked on the logs instead. Same reason
-// transport-byow.js scans PieceAdded through filfox.
-const LOG_RPC = 'https://calibration.filfox.info/rpc/v1'
-const RPC_TIMEOUT_MS = 60_000 // a 2k-block getLogs regularly outlasts viem's 10s default
-const MIN_CHUNK = 250
-const REORG_MARGIN = 120
 
 function storageFor(storage) {
   if (storage != null) return storage
   if (typeof localStorage === 'undefined') return { getItem: () => null, setItem: () => {} }
   return localStorage
-}
-
-async function getLogsChunked(client, args, from, to) {
-  const out = []
-  let span = LOG_CHUNK
-  let cursor = from
-  while (cursor <= to) {
-    const end = Math.min(cursor + span - 1, to)
-    try {
-      out.push(...await client.getLogs({ ...args, fromBlock: BigInt(cursor), toBlock: BigInt(end) }))
-      cursor = end + 1
-    } catch (err) {
-      if (span <= MIN_CHUNK) throw err
-      span = Math.floor(span / 2)
-    }
-  }
-  return out
 }
 
 /**
@@ -71,12 +44,12 @@ export async function readCoins(client, { payer, fromBlock, token = calibration.
   const head = Number(await client.getBlockNumber({ cacheTime: 0 }))
   const start = cached ? Math.max(Number(fromBlock), cached.toBlock - REORG_MARGIN) : Number(fromBlock)
   const keep = cached ? cached.deposits.filter((d) => d.epoch < start) : []
-  const logs = await getLogsChunked(client, {
+  const logs = await tokenLogs(client, {
     address: calibration.contracts.filecoinPay.address,
     event: DEPOSIT_EVENT,
     args: { to: payer },
-  }, start, head)
-  const fresh = logs.filter((l) => l.args.token.toLowerCase() === String(token).toLowerCase()).map((l) => ({ from: l.args.from, amount: l.args.amount.toString(), epoch: Number(l.blockNumber), txHash: l.transactionHash, logIndex: Number(l.logIndex) }))
+  }, token, start, head)
+  const fresh = logs.map((l) => ({ from: l.args.from, amount: l.args.amount.toString(), epoch: Number(l.blockNumber), txHash: l.transactionHash, logIndex: Number(l.logIndex) }))
   const seen = new Set()
   const deposits = [...keep, ...fresh]
     .filter((d) => { const id = `${d.txHash}:${d.logIndex}`; if (seen.has(id)) return false; seen.add(id); return true })
@@ -89,9 +62,9 @@ export async function readCoins(client, { payer, fromBlock, token = calibration.
   return { head, deposits: deposits.map((d) => ({ ...d, amount: BigInt(d.amount) })) }
 }
 
-/** A public client on calibration for reading the till (see LOG_RPC). */
+/** A public client on calibration for reading the till (see chain-logs.js). */
 export function coinClient() {
-  return createPublicClient({ chain: calibration, transport: http(LOG_RPC, { timeout: RPC_TIMEOUT_MS }) })
+  return createPublicClient({ chain: calibration, transport: http(logRpc(calibration.id), { timeout: LOG_RPC_TIMEOUT_MS }) })
 }
 
 /**

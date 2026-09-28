@@ -24,8 +24,9 @@
  *                an app whose pieces carry sealed thumbnails raises it
  *     logRpcs?:  [url, ...]  RPCs for eth_getLogs scans, tried in order. The
  *                default glif endpoint fails browser CORS on log responses
- *                over ~100 KB (2026-09-10), so scans default to filfox then
- *                drpc; everything else stays on the SDK's default RPC.
+ *                over ~100 KB (2026-09-10) and no longer serves old blocks,
+ *                so scans default to chain-logs.js's list; everything else
+ *                stays on the SDK's default RPC.
  *   }
  *
  * Works in node and browsers (fetch, WebCrypto, BigInt). The browser build
@@ -38,11 +39,11 @@ import {
 import { scan, TAG_APP, TAG_GAME, TAG_TYPE } from './discover.js'
 import { homeLog } from './byow-engine.js'
 import { cachedFetch, idbBodyStore } from './piece-cache.js'
+import { LOG_RPCS } from './chain-logs.js'
 
 const MIN_PIECE_BYTES = 127 // MIN_UPLOAD_SIZE: smaller uploads are rejected
 const MAX_PIECE_BYTES = 8192 // a game piece is ~300 bytes; refuse griefer blobs before buffering
 const RPC = calibration.rpcUrls.default.http[0]
-const DEFAULT_LOG_RPCS = ['https://calibration.filfox.info/rpc/v1', 'https://filecoin-calibration.drpc.org']
 
 function encodePiece(piece) {
   let json = JSON.stringify(piece)
@@ -296,7 +297,7 @@ export async function createByowTransport(config = {}) {
 
   // PieceAdded(dataSetId indexed, pieceId indexed, pieceCid, keys, values)
   const pieceAdded = calibration.contracts.fwss.abi.find((e) => e.type === 'event' && e.name === 'PieceAdded')
-  const logClients = (config.logRpcs ?? DEFAULT_LOG_RPCS)
+  const logClients = (config.logRpcs ?? LOG_RPCS[calibration.id])
     .map((url) => createPublicClient({ chain: calibration, transport: http(url, { retryCount: 0 }) }))
   async function fetchLogs(fromBlock, toBlock) {
     let lastError
