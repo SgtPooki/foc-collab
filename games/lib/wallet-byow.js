@@ -74,7 +74,8 @@ export function hasWallet() {
   return typeof window !== 'undefined' && window.ethereum != null
 }
 
-async function ensureChain(provider) {
+/** Switches the wallet to calibration, adding the chain if it is unknown. */
+export async function ensureChain(provider) {
   const current = await provider.request({ method: 'eth_chainId' })
   if (current?.toLowerCase() === CHAIN_HEX) return
   try {

@@ -17,8 +17,16 @@ import {
 export const DEPOSIT_EVENT = parseAbiItem(
   'event DepositRecorded(address indexed token, address indexed from, address indexed to, uint256 amount)',
 )
-const LOG_CHUNK = 2000 // Glif calibration caps eth_getLogs at 2880 blocks
-const RPC_TIMEOUT_MS = 60_000 // a 2k-block getLogs on Glif regularly outlasts viem's 10s default
+const LOG_CHUNK = 2000
+// The SDK's default Glif endpoint no longer serves this scan: since
+// 2026-09 it caps eth_getLogs at 360 blocks and refuses blocks older than
+// roughly 30k ("outside available upstream range"), so a till whose first
+// coin is weeks old can never be read there. filfox answers the whole
+// range in seconds, but times out whenever the token is in the topic
+// filter, so the token is checked on the logs instead. Same reason
+// transport-byow.js scans PieceAdded through filfox.
+const LOG_RPC = 'https://calibration.filfox.info/rpc/v1'
+const RPC_TIMEOUT_MS = 60_000 // a 2k-block getLogs regularly outlasts viem's 10s default
 const MIN_CHUNK = 250
 const REORG_MARGIN = 120
 
@@ -66,9 +74,9 @@ export async function readCoins(client, { payer, fromBlock, token = calibration.
   const logs = await getLogsChunked(client, {
     address: calibration.contracts.filecoinPay.address,
     event: DEPOSIT_EVENT,
-    args: { token, to: payer },
+    args: { to: payer },
   }, start, head)
-  const fresh = logs.map((l) => ({ from: l.args.from, amount: l.args.amount.toString(), epoch: Number(l.blockNumber), txHash: l.transactionHash, logIndex: Number(l.logIndex) }))
+  const fresh = logs.filter((l) => l.args.token.toLowerCase() === String(token).toLowerCase()).map((l) => ({ from: l.args.from, amount: l.args.amount.toString(), epoch: Number(l.blockNumber), txHash: l.transactionHash, logIndex: Number(l.logIndex) }))
   const seen = new Set()
   const deposits = [...keep, ...fresh]
     .filter((d) => { const id = `${d.txHash}:${d.logIndex}`; if (seen.has(id)) return false; seen.add(id); return true })
@@ -81,9 +89,9 @@ export async function readCoins(client, { payer, fromBlock, token = calibration.
   return { head, deposits: deposits.map((d) => ({ ...d, amount: BigInt(d.amount) })) }
 }
 
-/** A public client on calibration for reads. */
+/** A public client on calibration for reading the till (see LOG_RPC). */
 export function coinClient() {
-  return createPublicClient({ chain: calibration, transport: http(undefined, { timeout: RPC_TIMEOUT_MS }) })
+  return createPublicClient({ chain: calibration, transport: http(LOG_RPC, { timeout: RPC_TIMEOUT_MS }) })
 }
 
 /**

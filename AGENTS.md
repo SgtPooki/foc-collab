@@ -114,8 +114,8 @@ the only order the fold trusts is piece id inside one data set.
   created, descriptor saved once the key is authorized and again once
   the data set is known. One data set per wallet serves every game.
 - `games/lib/discover.js`: pure chain-event discovery: metadata tags on
-  uploads, chunked PieceAdded scanning (2000-block chunks; Glif caps
-  eth_getLogs at 2880), checkpoints. Hints only; the fold verifies what
+  uploads, chunked PieceAdded scanning (2000-block chunks through filfox;
+  Glif now caps eth_getLogs at 360 blocks and drops old blocks), checkpoints. Hints only; the fold verifies what
   they point at
 - `games/lib/transport*.js`: dumb append/list transports; they never
   interpret pieces. `transport-byow.js` writes to the player's own data

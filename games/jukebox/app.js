@@ -10,6 +10,7 @@ import { bootByowPage } from '../lib/boot-byow.js'
 import { coinClient, insertCoin, readCoins } from '../lib/coins.js'
 import { tagsFor } from '../lib/discover.js'
 import { pieceRef, signPiece, verifyAll } from '../lib/identity.js'
+import { ensureChain } from '../lib/wallet-byow.js'
 import { annotateWalletSigs, signWithWallet } from '../lib/wallet-sig.js'
 import { APP, PRICE, foldJukebox, usableTrack } from './fold.js'
 
@@ -191,8 +192,10 @@ export async function mountJukebox() {
   $('coin-connect').onclick = async () => {
     try {
       const accounts = await provider.request({ method: 'eth_requestAccounts' })
+      await ensureChain(provider) // a coin is signed against calibration; a wallet left on another chain fails inside the balance read
       address = accounts?.[0] ?? null
       if (address != null) localStorage.setItem('jukebox:wallet', address)
+      lastError = null
       render()
     } catch (err) {
       lastError = `wallet: ${err?.message ?? err}`
@@ -255,6 +258,7 @@ export async function mountJukebox() {
   }
 
   labelEl.textContent = `${transport.label} — loading the queue…`
+  render() // gate the buttons before the first scan (seconds); the markup alone shows them all enabled
   await refresh()
   labelEl.textContent = `${transport.label}: jukebox data set #${ds}, till ${short(payer)}`
   setInterval(() => { if (busy == null) refresh().catch(console.error) }, 10000)
