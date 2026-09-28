@@ -24,6 +24,7 @@ import { tagsFor } from '../lib/discover.js'
 import { fromB64u, pieceRef, signPiece, toB64u, verifyAll } from '../lib/identity.js'
 import { open, seal } from '../lib/seal.js'
 import { ensureChain } from '../lib/wallet-byow.js'
+import { readExif } from './exif.js'
 import { APP, foldAlbum } from './fold.js'
 
 const FULL_PX = 1600
@@ -54,6 +55,36 @@ async function reencode(file, maxPx, quality) {
   bitmap.close()
   const blob = await new Promise((resolve, reject) => canvas.toBlob((b) => (b == null ? reject(new Error('could not encode the image')) : resolve(b)), 'image/jpeg', quality))
   return { bytes: new Uint8Array(await blob.arrayBuffer()), w, h }
+}
+
+/** The fields of `exif` the contributor chose to keep, or undefined when none. */
+function keptMeta(exif, keep) {
+  const meta = {}
+  if (keep.taken && exif.taken) meta.taken = exif.taken
+  if (keep.camera && exif.camera) meta.camera = exif.camera
+  if (keep.camera && exif.lens) meta.lens = exif.lens
+  if (keep.gps && exif.gps) meta.gps = exif.gps
+  return Object.keys(meta).length === 0 ? undefined : meta
+}
+
+/** One line per kept field, for the viewer; location links to a map only when clicked. */
+function metaNodes(meta) {
+  if (meta == null) return []
+  const parts = []
+  if (meta.taken) parts.push(`taken ${meta.taken}`)
+  if (meta.camera) parts.push(meta.camera)
+  if (meta.lens) parts.push(meta.lens)
+  const nodes = [document.createTextNode(parts.join(' · '))]
+  if (meta.gps) {
+    const { lat, lon } = meta.gps
+    const a = document.createElement('a')
+    a.href = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    a.textContent = `${lat}, ${lon}`
+    nodes.push(document.createTextNode(`${parts.length > 0 ? ' · ' : ''}location `), a)
+  }
+  return nodes
 }
 
 function rememberAlbum(entry) {
@@ -310,6 +341,7 @@ export async function mountAlbum() {
       viewing = photo
       $('viewer-img').src = thumbUrl(photo)
       $('viewer-caption').textContent = photo.caption ?? ''
+      $('viewer-meta').replaceChildren(...metaNodes(photo.meta))
       $('viewer-remove').hidden = !canWrite || !(isMine(photo) || me?.ds === target.root)
       const status = $('viewer-status')
       status.classList.remove('error')
@@ -342,6 +374,50 @@ export async function mountAlbum() {
       }
     }
 
+    // ------------------------------------------------------------- metadata
+    // Read each chosen file's EXIF as soon as it is picked, so the choice of
+    // what to keep is made with the details in front of the contributor.
+    const exifOf = new Map() // File -> readExif() result
+    const keepChoices = () => ({ taken: $('keep-taken').checked, camera: $('keep-camera').checked, gps: $('keep-gps').checked })
+    function renderMetaList() {
+      const files = [...$('files').files]
+      $('meta-choices').hidden = files.length === 0
+      const keep = keepChoices()
+      $('meta-list').replaceChildren(...files.map((file) => {
+        const li = document.createElement('li')
+        const exif = exifOf.get(file)
+        if (exif == null) {
+          li.textContent = `${file.name}: reading…`
+          return li
+        }
+        const found = []
+        if (exif.taken) found.push(`taken ${exif.taken}`)
+        if (exif.camera) found.push(exif.camera)
+        if (exif.lens) found.push(exif.lens)
+        if (exif.gps) found.push(`location ${exif.gps.lat}, ${exif.gps.lon}`)
+        if (found.length === 0) {
+          li.textContent = `${file.name}: no metadata found`
+          return li
+        }
+        const kept = keptMeta(exif, keep)
+        li.textContent = `${file.name}: ${found.join(' · ')} → keeping ${kept == null ? 'nothing' : Object.keys(kept).join(', ')}`
+        if (exif.gps && keep.gps) li.classList.add('gps')
+        return li
+      }))
+    }
+    $('files').onchange = async () => {
+      renderMetaList()
+      for (const file of $('files').files) {
+        try {
+          exifOf.set(file, readExif(new Uint8Array(await file.arrayBuffer())))
+        } catch {
+          exifOf.set(file, {})
+        }
+        renderMetaList()
+      }
+    }
+    for (const id of ['keep-taken', 'keep-camera', 'keep-gps']) $(id).onchange = renderMetaList
+
     // --------------------------------------------------------------- upload
     async function appendLog(body, label) {
       const inner = await signPiece({ v: 2, app: APP, log: homeLog(me.ds), ...body }, identity)
@@ -365,12 +441,15 @@ export async function mountAlbum() {
           setStatus(`${label}: resizing and encrypting`)
           const full = await reencode(file, FULL_PX, 0.85)
           const thumb = await reencode(file, THUMB_PX, 0.7)
+          const meta = keptMeta(exifOf.get(file) ?? readExif(new Uint8Array(await file.arrayBuffer())), keepChoices())
           const blob = await transport.appendBlob(await seal(full.bytes, ak), (stage) => setStatus(`${label}: ${stage}`), tagsFor(APP, tag, 'blob'))
-          await appendLog({ type: 'photo', album: target.id, blob, thumb: toB64u(thumb.bytes), w: full.w, h: full.h, ...(caption ? { caption } : {}) }, label)
+          await appendLog({ type: 'photo', album: target.id, blob, thumb: toB64u(thumb.bytes), w: full.w, h: full.h, ...(caption ? { caption } : {}), ...(meta ? { meta } : {}) }, label)
           pending++
         }
         busy = null
         $('files').value = ''
+        exifOf.clear()
+        renderMetaList()
         await refresh()
       } catch (err) {
         fail('upload stopped', err)

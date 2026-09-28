@@ -59,6 +59,14 @@ opened).
   on a wallet's first derivation, and after that checks the re-derived
   key against the one the member published, failing loudly on drift.
   Same approach as Keysmith and swarm-id (snaha/swarm-id#735, #821).
+- **Metadata is the contributor's choice.** Picking photos reads their
+  EXIF (`exif.js`: date taken, camera, lens, location) and shows it; the
+  contributor keeps any of date, camera, and location (location is off
+  by default). Kept fields ride in the photo's sealed log piece as
+  `meta`, so only members see them; the image bytes carry none, since
+  the canvas re-encode drops EXIF (checked on a real Nikon sample). A
+  photo's metadata cannot be edited after upload, because pieces are
+  immutable: remove the photo and upload it again.
 - **Scheme 1 only** (whole-object AES-GCM). The browser buffers a photo
   anyway; range reads come with the production library.
 - **Calibration demo data only** until the production FEE library ships.
