@@ -28,7 +28,9 @@
   #viewer { max-width: min(92vw, 1100px); border: 1px solid var(--line); border-radius: 12px; padding: 0.8rem; }
   #viewer img { max-width: 100%; max-height: 75vh; display: block; margin: 0 auto; }
   #viewer::backdrop { background: #000a; }
-  #meta-choices label { margin: 0 0.5rem; white-space: nowrap; }
+  #meta-choices label, #access-choice label { margin: 0 0.5rem; white-space: nowrap; }
+  #members-panel li { display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; padding: 0.2rem 0; border-bottom: 1px solid var(--line); font-size: 0.85rem; }
+  #members-panel ul { list-style: none; padding: 0; margin: 0.3rem 0; }
   #meta-list { list-style: none; padding: 0; margin: 0.4rem 0 0; font-size: 0.8rem; }
   #meta-list li { padding: 0.15rem 0; border-bottom: 1px solid var(--line); }
   #meta-list .gps { color: #b0761a; }
@@ -59,6 +61,12 @@
     <div class="panel">
       <h2>start an album</h2>
       <div class="row"><input id="new-title" type="text" maxlength="80" placeholder="album title, e.g. FIL Dev Summit 2026" /></div>
+      <div class="row" id="access-choice">
+        <label><input type="radio" name="access" value="link" checked /> anyone with the link and key</label>
+        <label><input type="radio" name="access" value="members" /> only people I approve</label>
+      </div>
+      <p class="meta">With approval, people ask to join from the link and you let them in (or out) by wallet; nobody
+      holds a shared key. Removing someone stops them seeing anything added afterwards.</p>
       <div class="row"><button id="create" class="primary">create album</button></div>
       <p class="meta">Your wallet signs twice: once to lock the album's key to it, once more to check it signs the same way every time.</p>
     </div>
@@ -72,12 +80,19 @@
   <section id="unlock" hidden>
     <div class="panel">
       <h2>this album is locked</h2>
-      <p class="meta">Paste the access key the album's owner sent you. It is never part of the link.</p>
-      <div class="row"><input id="key-input" type="text" placeholder="access key" autocomplete="off" /></div>
-      <div class="row">
-        <button id="key-open" class="primary">open album</button>
-        <button id="owner-open" hidden>I made this album: unlock with my wallet</button>
+      <div id="key-entry">
+        <p class="meta">Paste the access key the album's owner sent you. It is never part of the link.</p>
+        <div class="row"><input id="key-input" type="text" placeholder="access key" autocomplete="off" /></div>
+        <div class="row"><button id="key-open" class="primary">open album</button></div>
       </div>
+      <div id="member-entry" hidden>
+        <p class="meta" id="member-note">Only people the album's owner approves can see it.</p>
+        <div class="row">
+          <button id="request-access" class="primary" hidden>ask to join</button>
+          <button id="member-open" class="primary" hidden>open with my wallet</button>
+        </div>
+      </div>
+      <div class="row"><button id="owner-open" hidden>I made this album: unlock with my wallet</button></div>
     </div>
   </section>
 
@@ -87,8 +102,19 @@
       <h2>invite people</h2>
       <p class="meta">Send the link and the access key separately (say, the link on a slide and the key in the event chat).</p>
       <p>link: <code id="share-link"></code> <button id="copy-link">copy</button></p>
-      <p>access key: <code id="share-key"></code> <button id="copy-key">copy</button></p>
-      <p class="warn">Anyone with the key can see every photo and add their own. Keys cannot be taken back.</p>
+      <p id="share-key-row">access key: <code id="share-key"></code> <button id="copy-key">copy</button></p>
+      <p class="warn" id="share-warn">Anyone with the key can see every photo and add their own. Keys cannot be taken back.</p>
+    </div>
+    <div class="panel" id="members-panel" hidden>
+      <h2>members</h2>
+      <p class="meta">People ask to join from the link. Approving sends them the album's keys; removing starts a new
+      key for everything added afterwards (they keep what they have already seen).</p>
+      <p class="meta" id="requests-head">asking to join</p>
+      <ul id="requests"></ul>
+      <p class="meta">members</p>
+      <ul id="members"></ul>
+      <p class="meta" id="removed-head">removed</p>
+      <ul id="removed"></ul>
     </div>
     <div class="panel" id="upload-panel">
       <h2>add photos</h2>

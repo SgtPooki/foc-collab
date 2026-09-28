@@ -21,10 +21,29 @@ piece cap to 128 KiB). An album link is `?album=<root>.<id>&from=<block>`;
 `from` is where discovery starts, since an album outlives the default
 lookback.
 
-Not built yet: wallet-to-wallet grants in the page (`join` and `grant`
-pieces; the key functions exist in `album-key.js`), and an owner's list
-of albums across browsers (the page lists only albums this browser
-opened).
+Two kinds of album, chosen at creation:
+
+- **Anyone with the link and key** (the default): one album key, pasted
+  as an access key.
+- **Only people I approve**: nobody holds a shared key. People ask to
+  join from the link (a wallet-signed `join` piece with their X25519
+  key, in their own data set); the owner approves them (a `keys` piece
+  in the owner's data set granting epoch keys 0..n); removing someone
+  starts a new epoch whose key only the remaining members receive. Epoch
+  keys derive one way from the album key, which never leaves the owner.
+  The removed member's own photos drop out of the album, since their
+  data set no longer counts. No contract and no key server: the
+  owner's data set is the authority, because only the owner can write
+  to it.
+
+Checked end to end on calibration with two wallets: create, request,
+approve, a member uploads, the owner removes them and adds a photo; the
+removed member keeps only what was shared before, cannot upload, and a
+stranger is asked to connect and request access.
+
+Not built yet: an owner's list of albums across browsers (the page lists
+only albums this browser opened), and private membership (who asked and
+who was let in is public on chain; photos are not).
 
 ## Decisions
 
