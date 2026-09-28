@@ -38,7 +38,7 @@
  */
 import { calibration, secp256k1, x25519 } from './foc-deps.js'
 import { fromB64u, toB64u } from './identity.js'
-import { unwrapKey, wrapKey } from './seal.js'
+import { open, seal, unwrapKey, wrapKey } from './seal.js'
 
 const DOMAIN = { name: 'foc-collab album', version: '1' } // fixed forever: no chainId, no contract
 const DOMAIN_TYPES = [{ name: 'name', type: 'string' }, { name: 'version', type: 'string' }] // what eth_signTypedData_v4 needs spelled out
@@ -140,23 +140,56 @@ function grantKek(privateKey, publicKey, epk, recipient, albumId) {
   return hkdf(shared, concat(epk, recipient), `foc-collab/grant/v1:${albumId}`)
 }
 
-/** AK wrapped to a member's X25519 public key: { epk, wrapped }, both base64url, safe to publish. */
-export async function grantTo(ak, recipientPublicKey, albumId) {
+/**
+ * Keys sealed to a member's X25519 public key: { epk, box }, both
+ * base64url, safe to publish. `keys` is the member's keyring (epoch keys
+ * 0..n of a members-only album), sealed as one FEE object under the
+ * ECDH-derived KEK.
+ */
+export async function grantTo(keys, recipientPublicKey, albumId) {
   const e = x25519.utils.randomPrivateKey()
   const epk = x25519.getPublicKey(e)
   const kek = await grantKek(e, recipientPublicKey, epk, recipientPublicKey, albumId)
-  return { epk: toB64u(epk), wrapped: toB64u(await wrapKey(kek, ak)) }
+  const box = await seal(enc(JSON.stringify(keys.map(toB64u))), kek)
+  return { epk: toB64u(epk), box: toB64u(box) }
 }
 
-/** The member's side of grantTo. Throws when the grant is for someone else or another album. */
+/** The member's side of grantTo: the keyring. Throws when the grant is for someone else or another album. */
 export async function openGrant(privateKey, grant, albumId) {
   const epk = fromB64u(grant.epk)
   const kek = await grantKek(privateKey, epk, epk, x25519.getPublicKey(privateKey), albumId)
+  let keys
   try {
-    return await unwrapKey(kek, fromB64u(grant.wrapped))
+    keys = JSON.parse(new TextDecoder().decode(await open(fromB64u(grant.box), kek)))
   } catch {
     throw new Error(`this grant is not for this wallet, or not for album ${albumId}`)
   }
+  return keys.map(fromB64u)
+}
+
+/**
+ * A members-only album's key for membership epoch `epoch`, derived one
+ * way from the album key: members hold epoch keys, never the album key,
+ * so a member removed at epoch n cannot derive the keys from n on. The
+ * owner re-derives any of them from the album key.
+ */
+export function epochKey(ak, albumId, epoch) {
+  return hkdf(ak, new Uint8Array(0), `foc-collab/album-epoch/v1:${albumId}:${epoch}`)
+}
+
+/** Epoch keys 0..epoch, the keyring a member of that epoch receives. */
+export function keyring(ak, albumId, epoch) {
+  return Promise.all(Array.from({ length: epoch + 1 }, (_, e) => epochKey(ak, albumId, e)))
+}
+
+/**
+ * A members-only album's discovery tag, from its public name alone: join
+ * requests come from people who hold no key yet, so the tag cannot be
+ * secret. Anyone with the link can see which data sets post to the album,
+ * never what they post.
+ */
+export async function publicAlbumTag(albumId) {
+  return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', enc(`foc-collab/album-public-tag/v1:${albumId}`)))).slice(0, 32)
 }
 
 /** The album's discovery tag: opaque to anyone without AK, the same for everyone with it. */

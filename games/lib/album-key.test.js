@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { privateKeyToAccount } from 'viem/accounts'
 import {
-  accessKeyFromText, accessKeyText, albumTag, encryptionKeyPair, grantTo, newAlbumKey,
-  openAlbumKey, openGrant, providerSigner,
+  accessKeyFromText, accessKeyText, albumTag, encryptionKeyPair, epochKey, grantTo, keyring, newAlbumKey,
+  openAlbumKey, openGrant, providerSigner, publicAlbumTag,
 } from './album-key.js'
 
 const owner = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d')
@@ -58,8 +58,8 @@ test('a lock whose nonce is not 16 bytes of hex is refused before the wallet is 
 test('a grant opens only for its member and only for its album', async () => {
   const { ak } = await newAlbumKey(signer(owner))
   const bob = await encryptionKeyPair(signer(member))
-  const grant = await grantTo(ak, bob.publicKey, 'album-1')
-  assert.deepEqual(await openGrant(bob.privateKey, grant, 'album-1'), ak)
+  const grant = await grantTo([ak], bob.publicKey, 'album-1')
+  assert.deepEqual(await openGrant(bob.privateKey, grant, 'album-1'), [ak])
   await assert.rejects(openGrant(bob.privateKey, grant, 'album-2'), /not for this wallet, or not for album album-2/)
   const eve = await encryptionKeyPair(signer(owner))
   await assert.rejects(openGrant(eve.privateKey, grant, 'album-1'), /not for this wallet, or not for album album-1/)
@@ -69,7 +69,7 @@ test('a grant to a low-order public key is refused: its shared secret would be p
   const { ak } = await newAlbumKey(signer(owner))
   const lowOrder = new Uint8Array(32)
   lowOrder[0] = 1 // u = 1
-  await assert.rejects(grantTo(ak, lowOrder, 'album-1'), /not a usable encryption key/)
+  await assert.rejects(grantTo([ak], lowOrder, 'album-1'), /not a usable encryption key/)
 })
 
 test('a member\'s first key signs twice; later keys sign once and reproduce the published key on any device', async () => {
@@ -141,4 +141,28 @@ test('the access key round-trips as text and rejects anything else', () => {
   const ak = crypto.getRandomValues(new Uint8Array(32))
   assert.deepEqual(accessKeyFromText(` ${accessKeyText(ak)}\n`), ak)
   assert.throws(() => accessKeyFromText('short'), /not an album access key/)
+})
+
+test('epoch keys are stable for the owner, distinct per epoch and per album, and a keyring holds 0..n', async () => {
+  const { ak } = await newAlbumKey(signer(owner))
+  assert.deepEqual(await epochKey(ak, '100.aa', 2), await epochKey(ak, '100.aa', 2))
+  assert.notDeepEqual(await epochKey(ak, '100.aa', 1), await epochKey(ak, '100.aa', 2))
+  assert.notDeepEqual(await epochKey(ak, '100.aa', 1), await epochKey(ak, '100.bb', 1))
+  const ring = await keyring(ak, '100.aa', 2)
+  assert.equal(ring.length, 3)
+  assert.deepEqual(ring[2], await epochKey(ak, '100.aa', 2))
+})
+
+test('a member granted epochs 0..n opens exactly that keyring', async () => {
+  const { ak } = await newAlbumKey(signer(owner))
+  const bob = await encryptionKeyPair(signer(member))
+  const ring = await keyring(ak, '100.aa', 1)
+  const got = await openGrant(bob.privateKey, await grantTo(ring, bob.publicKey, '100.aa'), '100.aa')
+  assert.deepEqual(got, ring)
+})
+
+test('the public tag depends only on the album name', async () => {
+  assert.equal(await publicAlbumTag('100.aa'), await publicAlbumTag('100.aa'))
+  assert.notEqual(await publicAlbumTag('100.aa'), await publicAlbumTag('100.bb'))
+  assert.match(await publicAlbumTag('100.aa'), /^[0-9a-f]{32}$/)
 })
