@@ -316,8 +316,8 @@ export async function mountAlbum() {
         return b
       }))
       if (busy == null && lastError == null) {
-        if (!state.exists) setStatus('looking for the album on chain; a new album appears within a minute or two')
-        else if (pending > 0) setStatus(`${pending} photo${pending === 1 ? '' : 's'} uploaded, appearing in the album shortly`)
+        if (pending > 0) setStatus(`${pending} photo${pending === 1 ? '' : 's'} uploaded, appearing in the album shortly`)
+        else if (!state.exists) setStatus('looking for the album on chain; a new album appears within a minute or two')
         else if (!canWrite) setStatus(me == null ? 'viewing: connect your wallet (above) to add photos' : 'viewing: your session key expired; reconnect to add photos')
         else setStatus(`${state.photos.length} photo${state.photos.length === 1 ? '' : 's'}`)
       }
