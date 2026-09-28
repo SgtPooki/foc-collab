@@ -105,7 +105,8 @@ the only order the fold trusts is piece id inside one data set.
   IndexedDB (one record per CID; they used to fill localStorage's quota)
   and raw blobs in the Cache API; both fall back to memory
 - `games/lib/album-key.js`: wallet-unlocked album keys, wallet-derived
-  X25519 member keys, grants, the HMAC discovery tag (Keysmith-shaped)
+  X25519 member keys, grants, the HMAC discovery tag (Keysmith-shaped).
+  The album itself is in progress: `games/album/README.md`
 - `games/chat/`, `games/paint/`, `games/jukebox/`: the many-writer apps.
   Chat posts from wallet players' data sets or the arcade's; paint and
   the jukebox each live in one sponsored data set (35455, 35458) so
