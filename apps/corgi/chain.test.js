@@ -20,8 +20,10 @@ function fakeClient({ head, logs, maxRange = 10_000 }) {
   return {
     calls,
     async getBlockNumber() { return BigInt(head) },
+    filters: [],
     async getLogs({ fromBlock, toBlock, args }) {
       calls.push([Number(fromBlock), Number(toBlock)])
+      this.filters.push(args)
       if (toBlock - fromBlock + 1n > BigInt(maxRange)) throw new Error('Invalid parameters were provided to the RPC method.')
       const matches = (l) => (args.to ? l.args.to === args.to && l.kind === 'deposit' : l.args.from === args.from && l.kind === 'withdrawal')
       return logs
@@ -95,4 +97,14 @@ test('readAccount projects unreserved funds without clamping', async () => {
   assert.equal(a.unreserved, 100n - 30n - 100n) // -30: in deficit
   assert.equal(a.runwayInEpochs, 0n)
   assert.equal(a.ratePerEpoch, 1n)
+})
+
+test('the token is checked on the returned logs, never sent in the RPC filter', async () => {
+  const other = { ...log(A, 9n, 1600), args: { ...log(A, 9n, 1600).args, token: '0x000000000000000000000000000000000000dead' } }
+  const upper = { ...log(B, 3n, 1700), args: { ...log(B, 3n, 1700).args, token: calibration.contracts.usdfc.address.toUpperCase() } }
+  const client = fakeClient({ head: 2000, logs: [log(A, 1n, 1500), other, upper, wlog(2n, 1800)] })
+  const { deposits, withdrawals } = await readDeposits(client, target)
+  assert.equal(client.filters.some((f) => 'token' in f), false)
+  assert.deepEqual(deposits.map((d) => d.amount), [1n, 3n])
+  assert.deepEqual(withdrawals.map((d) => d.amount), [2n])
 })
